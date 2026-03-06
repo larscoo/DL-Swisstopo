@@ -15,8 +15,13 @@ Punkte erzeugen -> 25m x 25m Tiles von Swisstopo laden -> labels.csv aufbauen ->
 - `generate_points_grid.py`: erstellt `points.csv` mit Koordinaten
 - `download_tiles.py`: lädt Bilder und schreibt `labels.csv`
 - `points.csv`: Eingabe mit Punkten (`x,y,label,region_id`)
-- `images/`: heruntergeladene Tiles
+- `images/`: heruntergeladene Tiles (pro Region in `images/<region_id>/`)
 - `labels.csv`: Datensatz-Metadaten fürs Training
+
+Dateinamen pro Region:
+- Glarus: `gl_00001.jpg`
+- Basel-Stadt: `bl_00001.jpg`
+- Basel Innenstadt: `blc_00001.jpg`
 
 ## Setup
 
@@ -26,10 +31,16 @@ python3 -m pip install requests
 
 ## Quickstart (Glarus)
 
-1. Punkte für Glarus generieren:
+1. Punkte für Glarus generieren (zusammenhängende 4x4-Blöcke):
 
 ```bash
-python3 generate_points_grid.py --preset glarus --max-points 120 --region-id region_glarus_01 --output points.csv
+python3 generate_points_grid.py \
+  --preset glarus \
+  --sampling blocks \
+  --num-blocks 64 \
+  --block-size 4 \
+  --region-id region_glarus_01 \
+  --output points.csv
 ```
 
 2. Tiles herunterladen:
@@ -38,18 +49,51 @@ python3 generate_points_grid.py --preset glarus --max-points 120 --region-id reg
 python3 download_tiles.py
 ```
 
+Standardverhalten: `labels.csv` wird erweitert (Append), damit bestehende Labels nicht verloren gehen.  
+Nur wenn du bewusst neu starten willst:
+
+```bash
+python3 download_tiles.py --overwrite
+```
+
 3. Ergebnis:
-- Bilder in `images/`
+- Bilder in `images/<region_id>/`
 - Metadaten in `labels.csv`
 
 ## Eigene Gebiete statt Preset
+
+Beispiel für Basel-Stadt (zusammenhängende 4x4-Blöcke):
+
+```bash
+python3 generate_points_grid.py \
+  --preset basel_stadt \
+  --sampling blocks \
+  --num-blocks 64 \
+  --block-size 4 \
+  --region-id region_basel_stadt_01 \
+  --output points.csv
+```
+
+Innenstadt-Fokus (engeres Preset):
+
+```bash
+python3 generate_points_grid.py \
+  --preset basel_stadt_core \
+  --sampling blocks \
+  --num-blocks 64 \
+  --block-size 4 \
+  --region-id region_basel_stadt_core_01 \
+  --output points.csv
+```
 
 ```bash
 python3 generate_points_grid.py \
   --xmin 2722500 --ymin 1207000 \
   --xmax 2725500 --ymax 1209500 \
   --step 25 \
-  --max-points 300 \
+  --sampling blocks \
+  --num-blocks 64 \
+  --block-size 4 \
   --region-id region_custom_01 \
   --output points.csv
 ```
@@ -65,6 +109,7 @@ x,y,label,region_id
 ```
 
 - `label` ist optional beim Download.
+- `block_id` ist optional. Wenn gesetzt (z. B. mit `--sampling blocks`), kann das Labeling-UI echte 4x4-Nachbarschaften seitenweise anzeigen.
 - Empfohlenes Labeling:
   - `crosswalk`
   - `no_crosswalk`
