@@ -18,10 +18,12 @@ Punkte erzeugen -> 25m x 25m Tiles von Swisstopo laden -> labels.csv aufbauen ->
 - `images/`: heruntergeladene Tiles (pro Region in `images/<region_id>/`)
 - `labels.csv`: Datensatz-Metadaten fürs Training
 
-Dateinamen pro Region:
-- Glarus: `gl_00001.jpg`
-- Basel-Stadt: `bl_00001.jpg`
+Orte mit gelabelten Daten:
 - Basel Innenstadt: `blc_00001.jpg`
+- Bern (to be continued)
+- Fribourg (to be continued)
+- Locarno (to be continued)
+- Genf (to be continued)
 
 ## Setup
 
