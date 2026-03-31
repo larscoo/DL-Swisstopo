@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DL-Projekt</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Bild-Labeling für DL-Swisstopo Projekt</h1>
+
+      <section class="toolbar">
+        <label class="region-picker" for="regionSelect">Ort</label>
+        <select id="regionSelect"></select>
+        <button id="savePageBtn">Seite speichern (1/0)</button>
+        <button id="clearSelectionBtn" class="secondary">Auswahl löschen</button>
+      </section>
+
+      <section class="meta">
+        <p id="pageInfo"></p>
+        <p id="statsInfo"></p>
+      </section>
+
+      <section id="grid" class="grid"></section>
+
+      <section class="pager">
+        <button id="prevBtn" class="secondary">Prev</button>
+        <button id="nextBtn">Next</button>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

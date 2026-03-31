@@ -1,0 +1,156 @@
+:root {
+  --bg: #f6f6f2;
+  --card: #ffffff;
+  --text: #1f2a1f;
+  --muted: #5e6d5e;
+  --accent: #1f7a4d;
+  --border: #d8dfd3;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  background: radial-gradient(circle at top, #e8efe5 0%, var(--bg) 45%);
+  color: var(--text);
+}
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+
+h1 {
+  margin: 0.15rem 0 0.5rem;
+  font-size: 1.3rem;
+}
+
+.toolbar {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+  flex-wrap: wrap;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.5rem;
+}
+
+.region-picker {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+select {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.45rem 0.55rem;
+  background: #fff;
+  color: var(--text);
+  font-weight: 600;
+}
+
+button {
+  border: none;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-weight: 700;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: #7e8f80;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.meta {
+  display: flex;
+  gap: 0.8rem;
+  color: var(--muted);
+  font-weight: 600;
+  margin: 0.35rem 0;
+  font-size: 0.9rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.card {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--card);
+  box-shadow: 0 4px 12px rgba(18, 28, 15, 0.08);
+  transition: transform 120ms ease, border-color 120ms ease;
+}
+
+.card:hover {
+  transform: translateY(-1px);
+}
+
+.card.selected {
+  border-color: var(--accent);
+}
+
+.card img {
+  width: 100%;
+  display: block;
+  aspect-ratio: 5 / 4;
+  object-fit: cover;
+  cursor: pointer;
+}
+
+.card-info {
+  padding: 0.26rem 0.36rem;
+}
+
+.filename {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.pager {
+  margin-top: 0.55rem;
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+@media (max-width: 900px) {
+  .container {
+    max-width: 800px;
+  }
+
+  .meta {
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+}
+
+@media (max-width: 620px) {
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
