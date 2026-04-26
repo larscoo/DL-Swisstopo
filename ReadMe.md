@@ -1,39 +1,66 @@
-# DL-Swisstopo Hackathon Toolkit
+# DL-Swisstopo
 
-Mini-Toolkit für den Deep-Learning-Hackathon:  
-Punkte erzeugen -> 25m x 25m Tiles von Swisstopo laden -> labels.csv aufbauen -> fürs Training nutzen.
+Toolkit zum Laden, Labeln, Trainieren und Testen eines Modells für Fussgängerstreifen auf Swisstopo-Tiles.
 
-## Was dieses Repo macht
+## Überblick
 
-- Batch-Download von Luftbildern (WMS `ch.swisstopo.swissimage`)
-- Automatische Generierung von Rasterpunkten (inkl. Preset für Glarus)
-- Fortschrittsanzeige mit Prozent + ETA beim Download
-- Ausgabe in einem sauberen Format für ML (`images/` + `labels.csv`)
+Der aktuelle Workflow ist:
 
-## Dateien
+1. Punkte erzeugen oder vorbereiten
+2. Tiles nach `data/unlabeled/` herunterladen
+3. Bilder im Web-UI labeln
+4. Gelabelte Bilder werden automatisch nach `data/y` oder `data/n` verschoben
+5. Modell mit `train.py` trainieren
+6. Modell mit `predict.py` auf neue Bilder anwenden
 
-- `generate_points_grid.py`: erstellt `points.csv` mit Koordinaten
-- `download_tiles.py`: lädt Bilder und schreibt `labels.csv`
-- `points.csv`: Eingabe mit Punkten (`x,y,label,region_id`)
-- `images/`: heruntergeladene Tiles (pro Region in `images/<region_id>/`)
-- `labels.csv`: Datensatz-Metadaten fürs Training
+## Projektstruktur
 
-Orte mit gelabelten Daten:
-- Basel Innenstadt: `blc_00001.jpg`
-- Bern (to be continued)
-- Fribourg (to be continued)
-- Locarno (to be continued)
-- Genf (to be continued)
+```text
+data/
+  unlabeled/     Noch nicht gelabelte Bilder für das Web-UI
+  y/             Positive Bilder: Fussgängerstreifen vorhanden
+  n/             Negative Bilder: kein Fussgängerstreifen
+  labels.csv     Metadaten für offene Bilder in data/unlabeled
 
-## Setup
+artifacts/
+  best_model.pt
+  metrics.json
+  manifest.csv
 
-```bash
-python3 -m pip install requests
+generate_points_grid.py
+download_tiles.py
+app.py
+train.py
+predict.py
 ```
 
-## Quickstart (Glarus)
+## Bedeutungen der Labels
 
-1. Punkte für Glarus generieren (zusammenhängende 4x4-Blöcke):
+- `1` oder positiv: Fussgängerstreifen vorhanden
+- `0` oder negativ: kein Fussgängerstreifen vorhanden
+
+## Voraussetzungen
+
+Mindestens benötigt:
+
+- Python 3
+- `requests` fuer den Tile-Download
+- `flask`, `pillow`, `torch`
+- optional `torchvision`
+
+Beispiel:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install requests flask pillow torch torchvision
+```
+
+## Quickstart
+
+### 1. Punkte erzeugen
+
+Beispiel mit Preset:
 
 ```bash
 python3 generate_points_grid.py \
@@ -45,53 +72,14 @@ python3 generate_points_grid.py \
   --output points.csv
 ```
 
-2. Tiles herunterladen:
-
-```bash
-python3 download_tiles.py
-```
-
-Standardverhalten: `labels.csv` wird erweitert (Append), damit bestehende Labels nicht verloren gehen.  
-Nur wenn du bewusst neu starten willst:
-
-```bash
-python3 download_tiles.py --overwrite
-```
-
-3. Ergebnis:
-- Bilder in `images/<region_id>/`
-- Metadaten in `labels.csv`
-
-## Eigene Gebiete statt Preset
-
-Beispiel für Basel-Stadt (zusammenhängende 4x4-Blöcke):
+Eigener Ausschnitt:
 
 ```bash
 python3 generate_points_grid.py \
-  --preset basel_stadt \
-  --sampling blocks \
-  --num-blocks 64 \
-  --block-size 4 \
-  --region-id region_basel_stadt_01 \
-  --output points.csv
-```
-
-Innenstadt-Fokus (engeres Preset):
-
-```bash
-python3 generate_points_grid.py \
-  --preset basel_stadt_core \
-  --sampling blocks \
-  --num-blocks 64 \
-  --block-size 4 \
-  --region-id region_basel_stadt_core_01 \
-  --output points.csv
-```
-
-```bash
-python3 generate_points_grid.py \
-  --xmin 2722500 --ymin 1207000 \
-  --xmax 2725500 --ymax 1209500 \
+  --xmin 2722500 \
+  --ymin 1207000 \
+  --xmax 2725500 \
+  --ymax 1209500 \
   --step 25 \
   --sampling blocks \
   --num-blocks 64 \
@@ -100,56 +88,173 @@ python3 generate_points_grid.py \
   --output points.csv
 ```
 
-Hinweis: Koordinaten sind in `EPSG:2056`.
+Hinweis:
 
-## Format von `points.csv`
+- Koordinaten sind in `EPSG:2056`
+- `points.csv` braucht mindestens `x`, `y`, `region_id`
 
-```csv
-x,y,label,region_id
-2725075.0,1208825.0,,region_glarus_01
-2722950.0,1207150.0,crosswalk,region_glarus_01
+### 2. Tiles herunterladen
+
+```bash
+python3 download_tiles.py
 ```
 
-- `label` ist optional beim Download.
-- `block_id` ist optional. Wenn gesetzt (z. B. mit `--sampling blocks`), kann das Labeling-UI echte 4x4-Nachbarschaften seitenweise anzeigen.
-- Empfohlenes Labeling:
-  - `crosswalk`
-  - `no_crosswalk`
-  - optional `ignore` für unklare Fälle
+Das Skript:
 
-## Format von `labels.csv`
+- laedt Bilder nach `data/unlabeled/<region_id>/`
+- speichert sie als Koordinaten-Dateinamen wie `2725075_1208825.jpg`
+- schreibt Metadaten nach `data/labels.csv`
 
-```csv
-image_path,label,region_id,x,y
-images/tile_00001.jpg,,region_glarus_01,2725075.0,1208825.0
+Wichtige Optionen:
+
+- `--input-csv points.csv`
+- `--output-dir data/unlabeled`
+- `--output-labels-csv data/labels.csv`
+- `--overwrite`
+
+### 3. Bilder im Web-UI labeln
+
+Webserver starten:
+
+```bash
+python3 app.py
 ```
 
-## Download-Fortschritt
+Dann im Browser die angezeigte lokale URL öffnen.
 
-`download_tiles.py` zeigt live:
-- `Progress: i/total`
-- Prozent
-- Elapsed
-- ETA
+Der Labeling-Tab zeigt nur offene Bilder aus `data/unlabeled`.
 
-## Tipps für gute Datenqualität
+Beim Speichern gilt:
 
-- Nutze mehrere Regionen (nicht nur ein Quartier)
-- Sammle harte Negativbeispiele (Straßenmarkierungen ohne Zebrastreifen)
-- Verteile Train/Val/Test nach `region_id` (kein Spatial Leakage)
-- Unklare Bilder als `ignore` markieren statt raten
+- `1` -> Datei wird nach `data/y` verschoben
+- `0` -> Datei wird nach `data/n` verschoben
 
-## Troubleshooting
+Danach verschwindet das Bild aus der offenen Queue.
 
-- `Input file 'points.csv' not found`  
-  -> zuerst `generate_points_grid.py` ausführen oder eigene `points.csv` anlegen.
+Wichtig:
 
-- Sehr viele ähnliche Bilder  
-  -> `step` erhöhen (z. B. `50`) oder `max-points` reduzieren.
+- Neue Bilder in `data/unlabeled` werden automatisch erkannt
+- Unterordner in `data/unlabeled` sind erlaubt, zum Beispiel `data/unlabeled/zuerich/`
+- Aus solchen Unterordnern wird automatisch eine lesbare `region_id`
 
-- Download langsam  
-  -> normal bei vielen Requests; Fortschritt/ETA beobachten.
+### 4. Modell trainieren
 
----
+Einfacher Testlauf auf dem Mac:
 
-Wenn du willst, kann als nächstes ein kleines Labeling-Tool mit Tastaturkürzeln (`1/0/i`) ergänzt werden.
+```bash
+python3 train.py \
+  --device cpu \
+  --model simple_cnn \
+  --pretrained off \
+  --epochs 2 \
+  --batch-size 32 \
+  --lr 1e-4
+```
+
+Empfohlener grösserer Lauf:
+
+```bash
+python3 train.py \
+  --balanced-sampling \
+  --model auto \
+  --pretrained auto \
+  --device auto \
+  --epochs 12 \
+  --batch-size 64 \
+  --spatial-bin-size 1000 \
+  --output-dir artifacts
+```
+
+Was `train.py` macht:
+
+- trainiert direkt aus `data/y` und `data/n`
+- liest Koordinaten aus Dateinamen wie `x_y.png`
+- erzeugt einen raeumlichen Split fuer `train`, `val`, `test`
+- speichert das beste Modell in `artifacts/best_model.pt`
+
+Wichtige Optionen:
+
+- `--device auto|cpu|mps|cuda`
+- `--model auto|simple_cnn|resnet18|efficientnet_b0`
+- `--pretrained auto|on|off`
+- `--balanced-sampling`
+- `--spatial-bin-size 1000`
+- `--csv-path data/labels.csv`
+
+Outputs:
+
+- `artifacts/best_model.pt`
+- `artifacts/metrics.json`
+- `artifacts/manifest.csv`
+
+## Inferenz
+
+Einzelbild:
+
+```bash
+python3 predict.py \
+  --checkpoint artifacts/best_model.pt \
+  --input data/y/2599350_1200900.png
+```
+
+Ganzer Ordner:
+
+```bash
+python3 predict.py \
+  --checkpoint artifacts/best_model.pt \
+  --input data/y \
+  --output-csv artifacts/predictions.csv
+```
+
+Die Ausgabe enthält:
+
+- `score`: Modellwahrscheinlichkeit für Fussgängerstreifen
+- `prediction`: `1` oder `0`
+- `threshold`: verwendete Entscheidungsschwelle
+
+## Formate
+
+### `points.csv`
+
+```csv
+x,y,label,region_id,block_id
+2725075.0,1208825.0,,region_glarus_01,block_0001
+2725100.0,1208825.0,crosswalk,region_glarus_01,block_0001
+```
+
+Hinweise:
+
+- `label` ist optional
+- `block_id` ist optional
+- gültige Labelwerte für CSV-basiertes Training sind `1`, `0`, `crosswalk`, `no_crosswalk`, `ignore`
+
+### `data/labels.csv`
+
+```csv
+image_path,label,region_id,x,y,block_id
+data/unlabeled/region_glarus_01/2725075_1208825.jpg,,region_glarus_01,2725075,1208825,block_0001
+```
+
+Hinweise:
+
+- die Datei beschreibt nur die offene Labeling-Queue
+- gelabelte Bilder bleiben für das Training in `data/y` und `data/n`
+- offene Bilder haben ein leeres `label`
+
+## Web-UI
+
+Die Web-App hat zwei Bereiche:
+
+- `Labeling`: offene Bilder sichten und nach `data/y` oder `data/n` verschieben
+- `Modell-Test`: einzelne Bilder hochladen und mit dem gespeicherten Modell prüfen
+
+Features:
+
+- Drag-and-Drop für Bild-Upload im Modell-Test
+- Sortierung und Filterung der Vorhersagen
+- automatische Queue-Synchronisation für `data/unlabeled`
+
+## Hinweise zum aktuellen Stand
+
+- Der aktive Workflow nutzt `data/unlabeled`, `data/y`, `data/n` und `data/labels.csv`
+- Alte `images/...`- und Regions-Praefix-Flows sind nicht mehr Teil des aktiven Setups
