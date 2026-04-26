@@ -3,30 +3,108 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DL-Projekt</title>
+    <title>Swisstopo Control Room</title>
     <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body>
-    <main class="container">
-      <h1>Bild-Labeling für DL-Swisstopo Projekt</h1>
-
-      <section class="toolbar">
-        <label class="region-picker" for="regionSelect">Ort</label>
-        <select id="regionSelect"></select>
-        <button id="savePageBtn">Seite speichern (1/0)</button>
-        <button id="clearSelectionBtn" class="secondary">Auswahl löschen</button>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">DL-Swisstopo</p>
+        <h1>Labeling und Modellprüfung</h1>
+        <p class="lead">
+          Links die Labeling-Ansicht, rechts ein schneller Modell-Check für hochgeladene Bilder.
+        </p>
       </section>
 
-      <section class="meta">
-        <p id="pageInfo"></p>
-        <p id="statsInfo"></p>
+      <nav class="tabs" aria-label="Bereiche">
+        <button class="tab-button active" data-tab="labeling" type="button">Labeling</button>
+        <button class="tab-button" data-tab="predict" type="button">Modell-Test</button>
+      </nav>
+
+      <section class="panel active" data-panel="labeling">
+        <section class="toolbar">
+          <label class="region-picker" for="regionSelect">Ort</label>
+          <select id="regionSelect"></select>
+          <button id="savePageBtn" type="button">Seite speichern (1/0)</button>
+          <button id="clearSelectionBtn" class="secondary" type="button">Auswahl löschen</button>
+        </section>
+
+        <section class="meta">
+          <p id="pageInfo"></p>
+          <p id="statsInfo"></p>
+        </section>
+
+        <section id="grid" class="grid"></section>
+
+        <section class="pager">
+          <button id="prevBtn" class="secondary" type="button">Prev</button>
+          <button id="nextBtn" type="button">Next</button>
+        </section>
       </section>
 
-      <section id="grid" class="grid"></section>
+      <section class="panel" data-panel="predict">
+        <section class="predict-hero">
+          <div>
+            <p class="section-kicker">Checkpoint-gestützte Inferenz</p>
+            <h2>Bild hochladen und direkt prüfen</h2>
+            <p class="section-copy">
+              Lade einzelne Tiles oder mehrere Bilder hoch. Das Modell liefert Score, Threshold und eine klare Ja/Nein-Entscheidung.
+            </p>
+          </div>
+          <div id="modelStatus" class="model-status">Modellstatus wird geladen …</div>
+        </section>
 
-      <section class="pager">
-        <button id="prevBtn" class="secondary">Prev</button>
-        <button id="nextBtn">Next</button>
+        <section class="predict-layout">
+          <form id="predictForm" class="upload-card">
+            <label id="predictDropzone" class="upload-dropzone" for="predictInput">
+              <input id="predictInput" name="images" type="file" accept="image/png,image/jpeg" multiple />
+              <span class="upload-title">Tiles hier ablegen oder auswählen</span>
+              <span class="upload-subtitle">PNG und JPG per Drag-and-Drop oder Dateiauswahl</span>
+            </label>
+            <div class="upload-actions">
+              <button id="predictBtn" type="submit">Vorhersage starten</button>
+              <button id="clearUploadBtn" class="secondary" type="button">Auswahl leeren</button>
+            </div>
+            <p id="predictFeedback" class="feedback"></p>
+          </form>
+
+          <aside class="predict-sidecard">
+            <h3>Was angezeigt wird</h3>
+            <ul class="hint-list">
+              <li>`Score`: Wahrscheinlichkeit für Fussgängerstreifen</li>
+              <li>`Prediction`: finale Entscheidung mit gespeichertem Threshold</li>
+              <li>`Threshold`: Schwelle aus dem besten Checkpoint</li>
+              <li>Unsichere Fälle werden visuell markiert</li>
+            </ul>
+          </aside>
+        </section>
+
+        <section class="predict-toolbar">
+          <label for="predictSort">Sortierung</label>
+          <select id="predictSort">
+            <option value="original">Original</option>
+            <option value="uncertain">Unsicherste zuerst</option>
+            <option value="score_desc">Höchster Score zuerst</option>
+            <option value="score_asc">Niedrigster Score zuerst</option>
+          </select>
+          <label for="predictFilter">Filter</label>
+          <select id="predictFilter">
+            <option value="all">Alle</option>
+            <option value="positive">Nur positive Treffer</option>
+            <option value="negative">Nur negative Treffer</option>
+            <option value="uncertain">Nur unsichere Fälle</option>
+          </select>
+          <label for="predictLimit">Limit</label>
+          <select id="predictLimit">
+            <option value="all">Alle</option>
+            <option value="10">Top 10</option>
+            <option value="25">Top 25</option>
+            <option value="50">Top 50</option>
+          </select>
+          <button id="downloadPredictionsBtn" class="secondary" type="button">CSV herunterladen</button>
+        </section>
+
+        <section id="predictResults" class="predict-results"></section>
       </section>
     </main>
 

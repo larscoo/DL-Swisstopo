@@ -1,3 +1,5 @@
 .idea
 .venv
-images
+data/n
+data/y
+data/unlabeled

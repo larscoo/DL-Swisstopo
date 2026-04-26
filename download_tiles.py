@@ -5,9 +5,7 @@
 from __future__ import annotations
 import argparse
 import csv
-import re
 import time
-from collections import defaultdict
 from pathlib import Path
 import requests
 
@@ -18,14 +16,8 @@ TILE_SIZE_M = 25.0
 IMG_SIZE_PX = 256
 REQUEST_DELAY_S = 0.1
 INPUT_CSV = "points.csv"
-OUTPUT_LABELS_CSV = "labels.csv"
-OUTPUT_DIR = "images"
-IMAGE_NAME_RE = re.compile(r"^(?:[a-z]+_)?(\d+)\.jpg$")
-REGION_PREFIX_MAP = {
-    "region_glarus_01": "gl",
-    "region_basel_stadt_01": "bl",
-    "region_basel_stadt_core_01": "blc",
-}
+OUTPUT_LABELS_CSV = "data/labels.csv"
+OUTPUT_DIR = "data/unlabeled"
 
 
 def build_bbox(x: float, y: float, tile_size_m: float) -> str:
@@ -56,33 +48,19 @@ def normalize_region(region_id: str) -> str:
     return region if region else "region_unknown"
 
 
-def region_prefix(region_id: str) -> str:
-    region = normalize_region(region_id)
-    if region in REGION_PREFIX_MAP:
-        return REGION_PREFIX_MAP[region]
-
-    letters = "".join(ch for ch in region.lower() if ch.isalpha())
-    return (letters[:3] or "rg")
-
-
-def detect_next_image_index_per_region(labels_path: Path) -> dict[str, int]:
-    next_index: dict[str, int] = defaultdict(lambda: 1)
+def detect_existing_image_paths(labels_path: Path) -> set[str]:
+    existing_paths: set[str] = set()
     if not labels_path.exists():
-        return next_index
+        return existing_paths
 
     with labels_path.open("r", newline="", encoding="utf-8") as infile:
         reader = csv.DictReader(infile)
         for row in reader:
-            region_id = normalize_region(row.get("region_id", ""))
-            image_path = Path(str(row.get("image_path", "")))
-            match = IMAGE_NAME_RE.match(image_path.name)
-            if not match:
-                continue
-            current = int(match.group(1))
-            if current >= next_index[region_id]:
-                next_index[region_id] = current + 1
+            image_path = str(row.get("image_path", "")).strip()
+            if image_path:
+                existing_paths.add(image_path)
 
-    return next_index
+    return existing_paths
 
 
 def main() -> None:
@@ -125,7 +103,7 @@ def main() -> None:
         if total == 0:
             raise ValueError(f"No rows found in {input_path}. Add at least one point.")
 
-    next_index_by_region = detect_next_image_index_per_region(labels_path) if append_mode else defaultdict(lambda: 1)
+    existing_image_paths = detect_existing_image_paths(labels_path) if append_mode else set()
     write_header = True
     csv_mode = "w"
     if append_mode and labels_path.exists():
@@ -142,20 +120,34 @@ def main() -> None:
             for i, row in enumerate(rows, start=1):
                 x = float(row["x"])
                 y = float(row["y"])
+                x_int = int(round(x))
+                y_int = int(round(y))
                 region_id = normalize_region(row.get("region_id", ""))
                 region_dir = output_dir / region_id
                 region_dir.mkdir(parents=True, exist_ok=True)
 
-                image_no = next_index_by_region[region_id]
-                image_name = f"{region_prefix(region_id)}_{image_no:05d}.jpg"
+                image_name = f"{x_int}_{y_int}.jpg"
                 image_path = region_dir / image_name
-                next_index_by_region[region_id] = image_no + 1
+                image_path_str = image_path.as_posix()
+
+                if append_mode and image_path_str in existing_image_paths:
+                    elapsed = time.time() - start_time
+                    avg = elapsed / i
+                    eta = avg * (total - i)
+                    pct = (i / total) * 100.0
+                    print(
+                        f"\rProgress: {i}/{total} ({pct:5.1f}%) | "
+                        f"Elapsed: {elapsed:6.1f}s | ETA: {eta:6.1f}s",
+                        end="",
+                        flush=True,
+                    )
+                    continue
 
                 download_tile(session, x, y, image_path)
 
                 writer.writerow(
                     [
-                        str(image_path.as_posix()),
+                        image_path_str,
                         row.get("label", ""),
                         region_id,
                         x,
@@ -163,6 +155,7 @@ def main() -> None:
                         row.get("block_id", ""),
                     ]
                 )
+                existing_image_paths.add(image_path_str)
                 time.sleep(REQUEST_DELAY_S)
 
                 elapsed = time.time() - start_time
