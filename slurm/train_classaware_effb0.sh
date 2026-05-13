@@ -14,7 +14,18 @@ set -euo pipefail
 cd "${HOME}/DL-Swisstopo"
 mkdir -p logs
 
-source "${HOME}/miniconda3/etc/profile.d/conda.sh"
+if command -v conda >/dev/null 2>&1; then
+  CONDA_BASE="$(conda info --base)"
+elif [ -f "${HOME}/miniforge3/etc/profile.d/conda.sh" ]; then
+  CONDA_BASE="${HOME}/miniforge3"
+elif [ -f "${HOME}/miniconda3/etc/profile.d/conda.sh" ]; then
+  CONDA_BASE="${HOME}/miniconda3"
+else
+  echo "Could not locate conda installation." >&2
+  exit 1
+fi
+
+source "${CONDA_BASE}/etc/profile.d/conda.sh"
 conda activate deep-learning
 
 echo "Job started on $(hostname) at $(date)"
