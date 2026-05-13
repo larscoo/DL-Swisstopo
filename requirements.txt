@@ -1,0 +1,16 @@
+# Core application and training dependencies
+Flask
+Pillow
+requests
+torch
+torchvision
+
+# Optional extras for notebooks / comparison experiments in _others-Project
+# matplotlib
+# numpy
+# optuna
+# psutil
+# scikit-learn
+# seaborn
+# tensorflow
+# tqdm
