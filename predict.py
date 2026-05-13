@@ -11,6 +11,7 @@ import torch
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
+from artifact_utils import resolve_default_checkpoint_path
 from train import IMAGE_EXTENSIONS, build_model, default_transforms, resolve_device
 
 
@@ -34,8 +35,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run inference with a trained crosswalk classifier.")
     parser.add_argument(
         "--checkpoint",
-        default="artifacts/best_model.pt",
-        help="Path to the model checkpoint created by train.py.",
+        default=None,
+        help="Optional path to a model checkpoint. Defaults to the preferred checkpoint found under artifacts/.",
     )
     parser.add_argument(
         "--input",
@@ -44,7 +45,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--output-csv",
-        default="artifacts/predictions.csv",
+        default="artifacts/predictions/predictions.csv",
         help="CSV path for prediction results.",
     )
     parser.add_argument(
@@ -109,7 +110,8 @@ def make_loader(
 def main() -> None:
     args = parse_args()
 
-    checkpoint_path = Path(args.checkpoint)
+    project_root = Path(__file__).resolve().parent
+    checkpoint_path = resolve_default_checkpoint_path(project_root) if not args.checkpoint else Path(args.checkpoint)
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 

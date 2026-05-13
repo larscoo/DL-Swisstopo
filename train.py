@@ -97,7 +97,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--csv-path", default=None, help="Optional labels CSV such as data/labels.csv. If omitted, data/y and data/n are used.")
     parser.add_argument("--pos-dir", default="data/y", help="Directory with positive tiles.")
     parser.add_argument("--neg-dir", default="data/n", help="Directory with negative tiles.")
-    parser.add_argument("--output-dir", default="artifacts", help="Directory for checkpoints, metrics and manifest.")
+    parser.add_argument(
+        "--output-dir",
+        default=None,
+        help="Directory for checkpoints, metrics and manifest. Defaults to a timestamped folder under artifacts/runs/local/.",
+    )
     parser.add_argument("--epochs", type=int, default=12, help="Number of training epochs.")
     parser.add_argument("--batch-size", type=int, default=64, help="Batch size.")
     parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate.")
@@ -790,12 +794,17 @@ def format_wall_clock_from_now(offset_seconds: float) -> str:
     return target.strftime("%H:%M")
 
 
+def build_default_output_dir(base_dir: Path) -> Path:
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    return base_dir / "artifacts" / "runs" / "local" / f"{timestamp}-run"
+
+
 def main() -> None:
     args = parse_args()
     set_seed(args.seed)
     validate_threshold_args(args)
 
-    output_dir = Path(args.output_dir)
+    output_dir = Path(args.output_dir) if args.output_dir else build_default_output_dir(Path(__file__).resolve().parent)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     samples, dataset_source = load_samples(args)
