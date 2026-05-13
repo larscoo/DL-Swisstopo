@@ -44,7 +44,7 @@ predict.py
 Mindestens benötigt:
 
 - Python 3
-- `requests` fuer den Tile-Download
+- `requests` für den Tile-Download
 - `flask`, `pillow`, `torch`
 - optional `torchvision`
 
@@ -169,7 +169,7 @@ Was `train.py` macht:
 
 - trainiert direkt aus `data/y` und `data/n`
 - liest Koordinaten aus Dateinamen wie `x_y.png`
-- erzeugt einen raeumlichen Split fuer `train`, `val`, `test`
+- erzeugt einen räumlichen Split für `train`, `val`, `test`
 - speichert das beste Modell in `artifacts/best_model.pt`
 
 Wichtige Optionen:

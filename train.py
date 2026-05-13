@@ -10,6 +10,7 @@ import random
 import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 import torch
@@ -48,9 +49,10 @@ class Sample:
 
 
 class TileDataset(Dataset[tuple[torch.Tensor, torch.Tensor]]):
-    def __init__(self, samples: list[Sample], transform) -> None:
+    def __init__(self, samples: list[Sample], transform, label_transforms: dict[int, object] | None = None) -> None:
         self.samples = samples
         self.transform = transform
+        self.label_transforms = label_transforms or {}
 
     def __len__(self) -> int:
         return len(self.samples)
@@ -58,8 +60,9 @@ class TileDataset(Dataset[tuple[torch.Tensor, torch.Tensor]]):
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
         sample = self.samples[index]
         image = Image.open(sample.image_path).convert("RGB")
-        if self.transform is not None:
-            image = self.transform(image)
+        transform = self.label_transforms.get(sample.label, self.transform)
+        if transform is not None:
+            image = transform(image)
         label = torch.tensor(sample.label, dtype=torch.float32)
         return image, label
 
@@ -148,6 +151,24 @@ def parse_args() -> argparse.Namespace:
         "--balanced-sampling",
         action="store_true",
         help="Use a weighted sampler so positives and negatives appear more evenly during training.",
+    )
+    parser.add_argument(
+        "--imbalance-strategy",
+        choices=["auto", "none", "pos_weight", "sampler", "both"],
+        default="auto",
+        help="How to handle class imbalance. 'auto' keeps the current behavior: pos_weight only, or both when --balanced-sampling is set.",
+    )
+    parser.add_argument(
+        "--augmentation-mode",
+        choices=["standard", "class_aware"],
+        default="standard",
+        help="Training augmentation strategy. 'class_aware' applies stronger augmentations to positive samples.",
+    )
+    parser.add_argument(
+        "--threshold-min-recall",
+        type=float,
+        default=0.0,
+        help="Minimum validation recall required during threshold search. If no threshold satisfies it, best F1 is used.",
     )
     parser.add_argument(
         "--manifest-name",
@@ -416,6 +437,40 @@ def default_transforms(image_size: int) -> tuple[object, object]:
     return _to_tensor, _to_tensor
 
 
+def build_train_transforms(image_size: int, augmentation_mode: str) -> tuple[object, dict[int, object] | None]:
+    if augmentation_mode == "standard":
+        train_transform, _ = default_transforms(image_size)
+        return train_transform, None
+
+    if not HAS_TORCHVISION:
+        print("Warning: class-aware augmentation requires torchvision. Falling back to standard transforms.")
+        train_transform, _ = default_transforms(image_size)
+        return train_transform, None
+
+    common = [transforms.Resize((image_size, image_size))]
+    neg_transform = transforms.Compose(
+        common
+        + [
+            transforms.RandomHorizontalFlip(p=0.15),
+            transforms.ColorJitter(brightness=0.08, contrast=0.08, saturation=0.06, hue=0.01),
+            transforms.ToTensor(),
+        ]
+    )
+    pos_transform = transforms.Compose(
+        common
+        + [
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomVerticalFlip(p=0.2),
+            transforms.RandomApply([transforms.RandomRotation(20)], p=0.5),
+            transforms.RandomApply([transforms.RandomPerspective(distortion_scale=0.2, p=1.0)], p=0.2),
+            transforms.ColorJitter(brightness=0.18, contrast=0.18, saturation=0.14, hue=0.02),
+            transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 1.2)),
+            transforms.ToTensor(),
+        ]
+    )
+    return None, {0: neg_transform, 1: pos_transform}
+
+
 def resolve_pretrained_flag(model_name: str, pretrained: str) -> bool:
     if pretrained == "on":
         return True
@@ -494,6 +549,17 @@ def resolve_device(device_name: str) -> torch.device:
     return torch.device("cpu")
 
 
+def resolve_imbalance_strategy(args: argparse.Namespace) -> str:
+    if args.imbalance_strategy != "auto":
+        return args.imbalance_strategy
+    return "both" if args.balanced_sampling else "pos_weight"
+
+
+def validate_threshold_args(args: argparse.Namespace) -> None:
+    if not 0.0 <= args.threshold_min_recall <= 1.0:
+        raise ValueError("--threshold-min-recall must be between 0.0 and 1.0.")
+
+
 def make_train_sampler(samples: list[Sample]) -> WeightedRandomSampler | None:
     counts = Counter(sample.label for sample in samples)
     if len(counts) < 2:
@@ -510,8 +576,9 @@ def make_loader(
     shuffle: bool,
     device: torch.device,
     sampler: WeightedRandomSampler | None = None,
+    label_transforms: dict[int, object] | None = None,
 ) -> DataLoader:
-    dataset = TileDataset(samples, transform)
+    dataset = TileDataset(samples, transform, label_transforms=label_transforms)
     return DataLoader(
         dataset,
         batch_size=batch_size,
@@ -581,15 +648,34 @@ def compute_metrics_at_threshold(logits: torch.Tensor, targets: torch.Tensor, th
     }
 
 
-def find_best_threshold(logits: torch.Tensor, targets: torch.Tensor) -> tuple[float, dict[str, float]]:
+def find_best_threshold(logits: torch.Tensor, targets: torch.Tensor, min_recall: float = 0.0) -> tuple[float, dict[str, float]]:
     best_threshold = 0.5
     best_metrics = compute_metrics_at_threshold(logits, targets, 0.5)
+    best_valid_threshold: float | None = None
+    best_valid_metrics: dict[str, float] | None = None
     for step in range(5, 96, 5):
         threshold = step / 100.0
         metrics = compute_metrics_at_threshold(logits, targets, threshold)
         if metrics["f1"] > best_metrics["f1"]:
             best_threshold = threshold
             best_metrics = metrics
+        if metrics["recall"] >= min_recall:
+            if best_valid_metrics is None:
+                best_valid_threshold = threshold
+                best_valid_metrics = metrics
+                continue
+            current_key = (metrics["f1"], metrics["precision"], metrics["recall"], threshold)
+            best_key = (
+                best_valid_metrics["f1"],
+                best_valid_metrics["precision"],
+                best_valid_metrics["recall"],
+                float(best_valid_threshold),
+            )
+            if current_key > best_key:
+                best_valid_threshold = threshold
+                best_valid_metrics = metrics
+    if best_valid_metrics is not None and best_valid_threshold is not None:
+        return best_valid_threshold, best_valid_metrics
     return best_threshold, best_metrics
 
 
@@ -699,9 +785,15 @@ def format_duration(seconds: float) -> str:
     return f"{secs:d}s"
 
 
+def format_wall_clock_from_now(offset_seconds: float) -> str:
+    target = datetime.fromtimestamp(time.time() + max(offset_seconds, 0.0))
+    return target.strftime("%H:%M")
+
+
 def main() -> None:
     args = parse_args()
     set_seed(args.seed)
+    validate_threshold_args(args)
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -725,8 +817,10 @@ def main() -> None:
     split_assignments.update({sample.image_path: "test" for sample in test_samples})
     save_manifest(output_dir / args.manifest_name, samples, split_assignments)
 
-    train_transform, eval_transform = default_transforms(args.image_size)
-    train_sampler = make_train_sampler(train_samples) if args.balanced_sampling else None
+    train_transform, train_label_transforms = build_train_transforms(args.image_size, args.augmentation_mode)
+    _, eval_transform = default_transforms(args.image_size)
+    imbalance_strategy = resolve_imbalance_strategy(args)
+    train_sampler = make_train_sampler(train_samples) if imbalance_strategy in {"sampler", "both"} else None
     device = resolve_device(args.device)
     train_loader = make_loader(
         train_samples,
@@ -736,6 +830,7 @@ def main() -> None:
         shuffle=train_sampler is None,
         device=device,
         sampler=train_sampler,
+        label_transforms=train_label_transforms,
     )
     val_loader = make_loader(
         val_samples,
@@ -760,8 +855,11 @@ def main() -> None:
     train_counts = Counter(sample.label for sample in train_samples)
     pos = train_counts.get(1, 0)
     neg = train_counts.get(0, 0)
-    pos_weight = torch.tensor([neg / max(pos, 1)], dtype=torch.float32, device=device)
-    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    pos_weight_value = neg / max(pos, 1)
+    pos_weight = None
+    if imbalance_strategy in {"pos_weight", "both"}:
+        pos_weight = torch.tensor([pos_weight_value], dtype=torch.float32, device=device)
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight) if pos_weight is not None else nn.BCEWithLogitsLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     print(describe_split("Train", train_samples))
@@ -770,7 +868,9 @@ def main() -> None:
     print(
         f"Dataset source: {dataset_source} | Model: {model_info['model_name']} | "
         f"Device: {device.type} | pretrained_loaded={model_info['pretrained_loaded']} | "
-        f"balanced_sampling={args.balanced_sampling} | pos_weight={pos_weight.item():.2f}"
+        f"imbalance_strategy={imbalance_strategy} | augmentation_mode={args.augmentation_mode} | "
+        f"pos_weight={'off' if pos_weight is None else f'{pos_weight.item():.2f}'} | "
+        f"threshold_min_recall={args.threshold_min_recall:.2f}"
     )
 
     best_val_f1 = -1.0
@@ -790,7 +890,11 @@ def main() -> None:
                 model, val_loader, device, criterion, optimizer=None
             )
             if args.decision_threshold is None:
-                epoch_threshold, val_metrics = find_best_threshold(val_logits, val_targets)
+                epoch_threshold, val_metrics = find_best_threshold(
+                    val_logits,
+                    val_targets,
+                    min_recall=args.threshold_min_recall,
+                )
             else:
                 epoch_threshold = args.decision_threshold
                 val_metrics = compute_metrics_at_threshold(val_logits, val_targets, epoch_threshold)
@@ -830,7 +934,7 @@ def main() -> None:
             f"val_loss={val_loss:.4f} val_f1={val_metrics['f1']:.3f} val_pr_auc={val_metrics['pr_auc']:.3f} | "
             f"thr={epoch_threshold:.2f} | "
             f"epoch_time={format_duration(epoch_seconds)} elapsed={format_duration(elapsed_seconds)} "
-            f"eta={format_duration(eta_seconds)}"
+            f"eta={format_duration(eta_seconds)} finish~{format_wall_clock_from_now(eta_seconds)}"
         )
 
         if val_metrics["f1"] > best_val_f1:
@@ -853,7 +957,7 @@ def main() -> None:
         best_threshold = float(checkpoint.get("best_threshold", best_threshold))
 
     if test_samples:
-        test_loss, test_logits, test_targets = run_epoch(model, test_loader, device, criterion, optimizer=None)
+        test_loss, test_logits, test_targets, _ = run_epoch(model, test_loader, device, criterion, optimizer=None)
         test_metrics = compute_metrics_at_threshold(test_logits, test_targets, best_threshold)
     else:
         test_loss = 0.0
@@ -863,6 +967,11 @@ def main() -> None:
         "dataset_source": dataset_source,
         "model_info": model_info,
         "split_info": split_info,
+        "training_config": {
+            "augmentation_mode": args.augmentation_mode,
+            "imbalance_strategy": imbalance_strategy,
+            "threshold_min_recall": args.threshold_min_recall,
+        },
         "history": history,
         "best_threshold": best_threshold,
         "test_loss": test_loss,

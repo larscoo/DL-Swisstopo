@@ -7,6 +7,8 @@ let availableRegions = [];
 let uploadedFiles = [];
 let lastPredictionResults = [];
 let lastPredictionModel = null;
+let availableCheckpoints = [];
+let selectedCheckpoint = '';
 const selected = new Set();
 
 const gridEl = document.getElementById('grid');
@@ -24,6 +26,7 @@ const panels = [...document.querySelectorAll('.panel')];
 const predictFormEl = document.getElementById('predictForm');
 const predictInputEl = document.getElementById('predictInput');
 const predictDropzoneEl = document.getElementById('predictDropzone');
+const predictCheckpointEl = document.getElementById('predictCheckpoint');
 const predictBtnEl = document.getElementById('predictBtn');
 const clearUploadBtnEl = document.getElementById('clearUploadBtn');
 const predictFeedbackEl = document.getElementById('predictFeedback');
@@ -33,6 +36,14 @@ const predictSortEl = document.getElementById('predictSort');
 const predictFilterEl = document.getElementById('predictFilter');
 const predictLimitEl = document.getElementById('predictLimit');
 const downloadPredictionsBtnEl = document.getElementById('downloadPredictionsBtn');
+const imageLightboxEl = document.getElementById('imageLightbox');
+const lightboxImageEl = document.getElementById('lightboxImage');
+const lightboxCaptionEl = document.getElementById('lightboxCaption');
+const lightboxCloseBtnEl = document.getElementById('lightboxCloseBtn');
+const TAB_ROUTES = {
+  labeling: '/',
+  predict: '/predict',
+};
 
 function isSupportedImageFile(file) {
   const name = String(file?.name || '').toLowerCase();
@@ -61,6 +72,22 @@ function setActiveTab(tabName) {
   for (const panel of panels) {
     panel.classList.toggle('active', panel.dataset.panel === tabName);
   }
+}
+
+function getTabFromLocation() {
+  const path = window.location.pathname.replace(/\/+$/, '') || '/';
+  if (path === '/predict') {
+    return 'predict';
+  }
+  return 'labeling';
+}
+
+function navigateToTab(tabName) {
+  const nextPath = TAB_ROUTES[tabName] || TAB_ROUTES.labeling;
+  if (window.location.pathname !== nextPath) {
+    window.history.pushState({ tab: tabName }, '', nextPath);
+  }
+  setActiveTab(tabName);
 }
 
 async function fetchRegions() {
@@ -127,7 +154,7 @@ function renderGrid() {
   gridEl.innerHTML = '';
 
   if (currentItems.length === 0) {
-    gridEl.innerHTML = '<p class="empty-state">Keine offenen Bilder fuer diese Seite vorhanden.</p>';
+    gridEl.innerHTML = '<p class="empty-state">Keine offenen Bilder für diese Seite vorhanden.</p>';
     return;
   }
 
@@ -176,7 +203,7 @@ function renderGrid() {
 
   if (!gridEl.children.length) {
     gridEl.innerHTML =
-      '<p class="empty-state">Keine vorhandenen Bilddateien fuer diese Seite gefunden. Bitte <code>data/unlabeled</code> und <code>data/labels.csv</code> pruefen.</p>';
+      '<p class="empty-state">Keine vorhandenen Bilddateien für diese Seite gefunden. Bitte <code>data/unlabeled</code> und <code>data/labels.csv</code> pruefen.</p>';
   }
 }
 
@@ -229,14 +256,63 @@ function renderModelStatus(payload, isError = false) {
   }
   modelStatusEl.innerHTML = `
     <strong>${payload.model_name}</strong>
+    <span>Checkpoint: ${payload.checkpoint_relpath || payload.checkpoint_path || '-'}</span>
     <span>Device: ${payload.device}</span>
     <span>Threshold: ${Number(payload.threshold).toFixed(2)}</span>
   `;
 }
 
+function renderCheckpointOptions(items = [], activePath = '') {
+  availableCheckpoints = items;
+  predictCheckpointEl.innerHTML = '';
+
+  for (const item of items) {
+    const option = document.createElement('option');
+    option.value = item.path;
+    option.textContent = item.label;
+    predictCheckpointEl.appendChild(option);
+  }
+
+  if (items.length === 0) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'Keine Modelle gefunden';
+    predictCheckpointEl.appendChild(option);
+    predictCheckpointEl.disabled = true;
+    selectedCheckpoint = '';
+    return;
+  }
+
+  predictCheckpointEl.disabled = false;
+  selectedCheckpoint = activePath && items.some((item) => item.path === activePath) ? activePath : items[0].path;
+  predictCheckpointEl.value = selectedCheckpoint;
+}
+
 function setPredictFeedback(message, isError = false) {
   predictFeedbackEl.textContent = message;
   predictFeedbackEl.classList.toggle('error', isError);
+}
+
+function openLightbox(imageSrc, caption = '') {
+  if (!imageSrc || !imageLightboxEl) {
+    return;
+  }
+  lightboxImageEl.src = imageSrc;
+  lightboxImageEl.alt = caption;
+  lightboxCaptionEl.textContent = caption;
+  imageLightboxEl.hidden = false;
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox() {
+  if (!imageLightboxEl) {
+    return;
+  }
+  imageLightboxEl.hidden = true;
+  lightboxImageEl.src = '';
+  lightboxImageEl.alt = '';
+  lightboxCaptionEl.textContent = '';
+  document.body.style.overflow = '';
 }
 
 function predictionUncertainty(result) {
@@ -314,8 +390,12 @@ function renderPredictionResults(results = [], model = null) {
 
     if (uploadedFiles[index]) {
       const img = document.createElement('img');
-      img.src = URL.createObjectURL(uploadedFiles[index]);
+      const previewUrl = URL.createObjectURL(uploadedFiles[index]);
+      img.src = previewUrl;
       img.alt = result.filename;
+      img.addEventListener('click', () => {
+        openLightbox(previewUrl, result.filename || '');
+      });
       media.appendChild(img);
     }
 
@@ -340,27 +420,11 @@ function renderPredictionResults(results = [], model = null) {
       const metrics = document.createElement('div');
       metrics.className = 'predict-metrics';
       metrics.innerHTML = `
-        <span>Score <strong>${Number(result.score).toFixed(3)}</strong></span>
-        <span>Threshold <strong>${Number(result.threshold).toFixed(2)}</strong></span>
         <span>Prediction <strong>${result.prediction}</strong></span>
+        <span>Score <strong>${Number(result.score).toFixed(3)}</strong></span>
+        <span class="predict-threshold">Threshold ${Number(result.threshold).toFixed(2)}</span>
       `;
       body.appendChild(metrics);
-
-      const confidence = document.createElement('p');
-      confidence.className = 'predict-confidence';
-      if (predictionUncertainty(result) <= 0.08) {
-        confidence.textContent = 'Unsicherer Fall: Score liegt nahe am Threshold.';
-      } else {
-        confidence.textContent = 'Klare Entscheidung.';
-      }
-      body.appendChild(confidence);
-    }
-
-    if (model) {
-      const chip = document.createElement('p');
-      chip.className = 'predict-chip';
-      chip.textContent = `${model.model_name} auf ${model.device}`;
-      body.appendChild(chip);
     }
 
     card.appendChild(media);
@@ -406,12 +470,15 @@ function downloadPredictionsCsv() {
 
 async function fetchModelStatus() {
   try {
-    const res = await fetch('/api/model-status');
+    const query = selectedCheckpoint ? `?checkpoint=${encodeURIComponent(selectedCheckpoint)}` : '';
+    const res = await fetch(`/api/model-status${query}`);
     const data = await res.json();
+    renderCheckpointOptions(data.available_checkpoints || [], data.checkpoint_relpath || selectedCheckpoint);
     if (!res.ok || !data.ready) {
       renderModelStatus(data, true);
       return;
     }
+    selectedCheckpoint = data.checkpoint_relpath || selectedCheckpoint;
     renderModelStatus(data);
   } catch (error) {
     renderModelStatus({ error: 'Modellstatus konnte nicht geladen werden.' }, true);
@@ -432,6 +499,9 @@ async function runPrediction(event) {
   const formData = new FormData();
   for (const file of uploadedFiles) {
     formData.append('images', file);
+  }
+  if (selectedCheckpoint) {
+    formData.append('checkpoint', selectedCheckpoint);
   }
 
   try {
@@ -553,14 +623,34 @@ clearSelectionBtn.addEventListener('click', () => {
 
 for (const button of tabButtons) {
   button.addEventListener('click', () => {
-    setActiveTab(button.dataset.tab);
+    navigateToTab(button.dataset.tab);
   });
 }
+
+window.addEventListener('popstate', () => {
+  setActiveTab(getTabFromLocation());
+});
+
+imageLightboxEl.addEventListener('click', (event) => {
+  if (event.target.dataset.closeLightbox === 'true' || event.target === imageLightboxEl) {
+    closeLightbox();
+  }
+});
+lightboxCloseBtnEl.addEventListener('click', closeLightbox);
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !imageLightboxEl.hidden) {
+    closeLightbox();
+  }
+});
 
 predictFormEl.addEventListener('submit', runPrediction);
 predictInputEl.addEventListener('change', handleUploadChange);
 bindPredictDropzone();
 clearUploadBtnEl.addEventListener('click', clearUploadSelection);
+predictCheckpointEl.addEventListener('change', async (event) => {
+  selectedCheckpoint = event.target.value;
+  await fetchModelStatus();
+});
 predictSortEl.addEventListener('change', () => {
   renderPredictionResults(lastPredictionResults, lastPredictionModel);
 });
@@ -575,6 +665,7 @@ downloadPredictionsBtnEl.addEventListener('click', downloadPredictionsCsv);
 async function init() {
   await Promise.all([fetchRegions(), fetchModelStatus()]);
   await loadPage(1);
+  setActiveTab(getTabFromLocation());
   renderPredictionResults();
 }
 

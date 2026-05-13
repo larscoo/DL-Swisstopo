@@ -303,6 +303,18 @@ button:disabled {
   box-shadow: 0 18px 40px rgba(29, 31, 26, 0.08);
 }
 
+.model-picker {
+  margin-bottom: 0.85rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.model-picker label {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--muted);
+}
+
 .upload-dropzone {
   display: grid;
   place-items: center;
@@ -410,6 +422,7 @@ button:disabled {
   display: block;
   object-fit: cover;
   aspect-ratio: 1 / 1;
+  cursor: zoom-in;
 }
 
 .predict-body {
@@ -422,13 +435,6 @@ button:disabled {
   margin: 0;
   font-size: 1rem;
   font-weight: 800;
-}
-
-.predict-confidence {
-  margin: 0;
-  font-size: 0.86rem;
-  font-weight: 700;
-  color: var(--muted);
 }
 
 .predict-metrics {
@@ -456,6 +462,11 @@ button:disabled {
   color: #7c4218;
 }
 
+.predict-threshold {
+  opacity: 0.8;
+  font-size: 0.78rem;
+}
+
 .predict-error {
   margin: 0;
   color: #8f2f24;
@@ -471,6 +482,70 @@ button:disabled {
   text-align: center;
   color: var(--muted);
   background: rgba(255, 255, 255, 0.55);
+}
+
+.lightbox[hidden] {
+  display: none;
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 1.2rem;
+}
+
+.lightbox-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(16, 18, 14, 0.82);
+  backdrop-filter: blur(4px);
+}
+
+.lightbox-figure {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  max-width: min(92vw, 1200px);
+  max-height: 90vh;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.lightbox-figure img {
+  max-width: 100%;
+  max-height: calc(90vh - 3rem);
+  display: block;
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+.lightbox-figure figcaption {
+  color: #f4efe8;
+  font-weight: 700;
+  text-align: center;
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.7rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.88);
+  color: #1d1f1a;
+  font-size: 1.5rem;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
 }
 
 @media (max-width: 980px) {

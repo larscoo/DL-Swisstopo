@@ -16,11 +16,12 @@ from train import build_model, default_transforms, resolve_device
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
+ARTIFACTS_DIR = BASE_DIR / "artifacts"
 UNLABELED_DIR = DATA_DIR / "unlabeled"
 POSITIVE_DIR = DATA_DIR / "y"
 NEGATIVE_DIR = DATA_DIR / "n"
 CSV_PATH = DATA_DIR / "labels.csv"
-CHECKPOINT_PATH = BASE_DIR / "artifacts" / "best_model.pt"
+CHECKPOINT_PATH = ARTIFACTS_DIR / "best_model.pt"
 PAGE_SIZE = 16
 
 app = Flask(__name__)
@@ -36,6 +37,7 @@ _predict_threshold = 0.5
 _predict_image_size = 224
 _predict_model_name = ""
 _predict_transform = None
+_predict_checkpoint_path = CHECKPOINT_PATH
 
 
 def _resolve_image_disk_path(image_path: str) -> Path:
@@ -198,24 +200,60 @@ def _assert_model_is_finite(model) -> None:
         raise ValueError(f"Checkpoint contains non-finite weights (for example: {', '.join(invalid)})")
 
 
-def _load_predict_model() -> dict[str, object]:
-    global _predict_model, _predict_device, _predict_threshold, _predict_image_size, _predict_model_name, _predict_transform
+def _list_available_checkpoints() -> list[dict[str, str]]:
+    checkpoints: list[dict[str, str]] = []
+    if not ARTIFACTS_DIR.exists():
+        return checkpoints
+
+    for path in sorted(ARTIFACTS_DIR.rglob("*.pt")):
+        if not path.is_file():
+            continue
+        rel_path = path.relative_to(BASE_DIR).as_posix()
+        checkpoints.append(
+            {
+                "path": rel_path,
+                "label": rel_path.removeprefix("artifacts/"),
+            }
+        )
+    return checkpoints
+
+
+def _resolve_checkpoint_path(checkpoint_value: str | None) -> Path:
+    requested = str(checkpoint_value or "").strip()
+    if not requested:
+        return CHECKPOINT_PATH
+
+    path = Path(requested)
+    candidate = path if path.is_absolute() else (BASE_DIR / path)
+    candidate = candidate.resolve()
+    try:
+        candidate.relative_to(BASE_DIR)
+    except ValueError as exc:
+        raise ValueError(f"Checkpoint path is outside the workspace: {requested}") from exc
+    return candidate
+
+
+def _load_predict_model(checkpoint_value: str | None = None) -> dict[str, object]:
+    global _predict_model, _predict_device, _predict_threshold, _predict_image_size, _predict_model_name, _predict_transform, _predict_checkpoint_path
 
     with _model_lock:
-        if _predict_model is not None:
+        checkpoint_path = _resolve_checkpoint_path(checkpoint_value)
+        if _predict_model is not None and _predict_checkpoint_path.resolve() == checkpoint_path.resolve():
             return {
                 "ready": True,
-                "checkpoint_path": CHECKPOINT_PATH.as_posix(),
+                "checkpoint_path": _predict_checkpoint_path.as_posix(),
+                "checkpoint_relpath": _predict_checkpoint_path.relative_to(BASE_DIR).as_posix(),
                 "device": _predict_device.type,
                 "threshold": _predict_threshold,
                 "image_size": _predict_image_size,
                 "model_name": _predict_model_name,
+                "available_checkpoints": _list_available_checkpoints(),
             }
 
-        if not CHECKPOINT_PATH.exists():
-            raise FileNotFoundError(f"Checkpoint not found: {CHECKPOINT_PATH}")
+        if not checkpoint_path.exists():
+            raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
-        checkpoint = torch.load(CHECKPOINT_PATH, map_location="cpu")
+        checkpoint = torch.load(checkpoint_path, map_location="cpu")
         model_args = checkpoint.get("args", {})
         model_info = checkpoint.get("model_info", {})
         model_name = str(model_info.get("model_name") or model_args.get("model") or "simple_cnn")
@@ -236,14 +274,17 @@ def _load_predict_model() -> dict[str, object]:
         _predict_image_size = image_size
         _predict_model_name = model_name
         _predict_transform = eval_transform
+        _predict_checkpoint_path = checkpoint_path
 
         return {
             "ready": True,
-            "checkpoint_path": CHECKPOINT_PATH.as_posix(),
+            "checkpoint_path": checkpoint_path.as_posix(),
+            "checkpoint_relpath": checkpoint_path.relative_to(BASE_DIR).as_posix(),
             "device": device.type,
             "threshold": threshold,
             "image_size": image_size,
             "model_name": model_name,
+            "available_checkpoints": _list_available_checkpoints(),
         }
 
 
@@ -389,6 +430,7 @@ def write_csv() -> None:
 
 
 @app.get("/")
+@app.get("/predict")
 def index():
     return render_template("index.html")
 
@@ -544,10 +586,18 @@ def stats():
 
 @app.get("/api/model-status")
 def model_status():
+    checkpoint_value = request.args.get("checkpoint", "")
     try:
-        return jsonify(_load_predict_model())
+        return jsonify(_load_predict_model(checkpoint_value))
     except Exception as exc:
-        return jsonify({"ready": False, "error": str(exc), "checkpoint_path": CHECKPOINT_PATH.as_posix()}), 500
+        return jsonify(
+            {
+                "ready": False,
+                "error": str(exc),
+                "checkpoint_path": CHECKPOINT_PATH.as_posix(),
+                "available_checkpoints": _list_available_checkpoints(),
+            }
+        ), 500
 
 
 @app.post("/api/predict")
@@ -556,8 +606,10 @@ def predict():
     if not files:
         return jsonify({"error": "Keine Bilder hochgeladen."}), 400
 
+    checkpoint_value = request.form.get("checkpoint", "")
+
     try:
-        model_status_payload = _load_predict_model()
+        model_status_payload = _load_predict_model(checkpoint_value)
     except Exception as exc:
         return jsonify({"error": f"Modell konnte nicht geladen werden: {exc}"}), 500
 
@@ -580,7 +632,7 @@ def predict():
                 "filename": filename,
                 "score": score,
                 "prediction": prediction,
-                "label": "Fussgaengerstreifen" if prediction == 1 else "Kein Fussgaengerstreifen",
+                "label": "Fussgängerstreifen" if prediction == 1 else "Kein Fussgängerstreifen",
                 "threshold": _predict_threshold,
             }
         )
