@@ -23,9 +23,13 @@ data/
   labels.csv     Metadaten für offene Bilder in data/unlabeled
 
 artifacts/
-  best_model.pt
-  metrics.json
-  manifest.csv
+  runs/
+    local/
+    server/
+      completed/
+      incomplete/
+  experiments/
+  predictions/
 
 generate_points_grid.py
 download_tiles.py
@@ -162,7 +166,7 @@ python3 train.py \
   --epochs 12 \
   --batch-size 64 \
   --spatial-bin-size 1000 \
-  --output-dir artifacts
+  --output-dir artifacts/runs/local/manual-efficientnet-run
 ```
 
 Was `train.py` macht:
@@ -170,7 +174,7 @@ Was `train.py` macht:
 - trainiert direkt aus `data/y` und `data/n`
 - liest Koordinaten aus Dateinamen wie `x_y.png`
 - erzeugt einen räumlichen Split für `train`, `val`, `test`
-- speichert das beste Modell in `artifacts/best_model.pt`
+- speichert das beste Modell standardmaessig in einen neuen Ordner unter `artifacts/runs/local/`
 
 Wichtige Optionen:
 
@@ -183,9 +187,16 @@ Wichtige Optionen:
 
 Outputs:
 
-- `artifacts/best_model.pt`
-- `artifacts/metrics.json`
-- `artifacts/manifest.csv`
+- `<output-dir>/best_model.pt`
+- `<output-dir>/metrics.json`
+- `<output-dir>/manifest.csv`
+
+Hinweis:
+
+- Trainingslaeufe liegen in `artifacts/runs/`
+- Vergleichs- und Kurzlaeufe liegen in `artifacts/experiments/`
+- Inferenz-CSV-Dateien liegen in `artifacts/predictions/`
+- Details zur Ablage stehen in `artifacts/README.md`
 
 ## Inferenz
 
@@ -193,7 +204,7 @@ Einzelbild:
 
 ```bash
 python3 predict.py \
-  --checkpoint artifacts/best_model.pt \
+  --checkpoint artifacts/runs/server/completed/a100_baseline_effb0/best_model.pt \
   --input data/y/2599350_1200900.png
 ```
 
@@ -201,9 +212,9 @@ Ganzer Ordner:
 
 ```bash
 python3 predict.py \
-  --checkpoint artifacts/best_model.pt \
+  --checkpoint artifacts/runs/server/completed/a100_baseline_effb0/best_model.pt \
   --input data/y \
-  --output-csv artifacts/predictions.csv
+  --output-csv artifacts/predictions/predictions.csv
 ```
 
 Die Ausgabe enthält:

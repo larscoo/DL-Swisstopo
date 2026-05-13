@@ -1,7 +1,25 @@
+# Python cache / local OS files
+__pycache__/
+*.pyc
+.DS_Store
 .idea
 .venv
+
+# Folders
 data/n
 data/y
 data/unlabeled
 archiv/Luisa_Zebra
 archiv/Michal_Zebra
+
+# Generated artifacts
+artifacts/runs/
+artifacts/experiments/
+artifacts/predictions/
+artifacts/**/*.pt
+artifacts/**/*.csv
+artifacts/**/*.json
+!artifacts/README.md
+
+# Logs
+logs/

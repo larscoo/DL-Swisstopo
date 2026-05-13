@@ -12,6 +12,7 @@ import torch
 from PIL import Image
 from flask import Flask, abort, jsonify, render_template, request, send_file
 
+from artifact_utils import list_available_checkpoints, resolve_default_checkpoint_path
 from train import build_model, default_transforms, resolve_device
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -21,7 +22,6 @@ UNLABELED_DIR = DATA_DIR / "unlabeled"
 POSITIVE_DIR = DATA_DIR / "y"
 NEGATIVE_DIR = DATA_DIR / "n"
 CSV_PATH = DATA_DIR / "labels.csv"
-CHECKPOINT_PATH = ARTIFACTS_DIR / "best_model.pt"
 PAGE_SIZE = 16
 
 app = Flask(__name__)
@@ -37,7 +37,7 @@ _predict_threshold = 0.5
 _predict_image_size = 224
 _predict_model_name = ""
 _predict_transform = None
-_predict_checkpoint_path = CHECKPOINT_PATH
+_predict_checkpoint_path: Path | None = None
 
 
 def _resolve_image_disk_path(image_path: str) -> Path:
@@ -201,27 +201,13 @@ def _assert_model_is_finite(model) -> None:
 
 
 def _list_available_checkpoints() -> list[dict[str, str]]:
-    checkpoints: list[dict[str, str]] = []
-    if not ARTIFACTS_DIR.exists():
-        return checkpoints
-
-    for path in sorted(ARTIFACTS_DIR.rglob("*.pt")):
-        if not path.is_file():
-            continue
-        rel_path = path.relative_to(BASE_DIR).as_posix()
-        checkpoints.append(
-            {
-                "path": rel_path,
-                "label": rel_path.removeprefix("artifacts/"),
-            }
-        )
-    return checkpoints
+    return list_available_checkpoints(BASE_DIR)
 
 
 def _resolve_checkpoint_path(checkpoint_value: str | None) -> Path:
     requested = str(checkpoint_value or "").strip()
     if not requested:
-        return CHECKPOINT_PATH
+        return resolve_default_checkpoint_path(BASE_DIR)
 
     path = Path(requested)
     candidate = path if path.is_absolute() else (BASE_DIR / path)
@@ -238,7 +224,7 @@ def _load_predict_model(checkpoint_value: str | None = None) -> dict[str, object
 
     with _model_lock:
         checkpoint_path = _resolve_checkpoint_path(checkpoint_value)
-        if _predict_model is not None and _predict_checkpoint_path.resolve() == checkpoint_path.resolve():
+        if _predict_model is not None and _predict_checkpoint_path is not None and _predict_checkpoint_path.resolve() == checkpoint_path.resolve():
             return {
                 "ready": True,
                 "checkpoint_path": _predict_checkpoint_path.as_posix(),
@@ -594,7 +580,7 @@ def model_status():
             {
                 "ready": False,
                 "error": str(exc),
-                "checkpoint_path": CHECKPOINT_PATH.as_posix(),
+                "checkpoint_path": "",
                 "available_checkpoints": _list_available_checkpoints(),
             }
         ), 500
