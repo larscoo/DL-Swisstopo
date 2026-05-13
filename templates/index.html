@@ -56,6 +56,10 @@
 
         <section class="predict-layout">
           <form id="predictForm" class="upload-card">
+            <div class="model-picker">
+              <label for="predictCheckpoint">Modell</label>
+              <select id="predictCheckpoint" name="checkpoint"></select>
+            </div>
             <label id="predictDropzone" class="upload-dropzone" for="predictInput">
               <input id="predictInput" name="images" type="file" accept="image/png,image/jpeg" multiple />
               <span class="upload-title">Tiles hier ablegen oder auswählen</span>
@@ -107,6 +111,15 @@
         <section id="predictResults" class="predict-results"></section>
       </section>
     </main>
+
+    <div id="imageLightbox" class="lightbox" hidden>
+      <div class="lightbox-backdrop" data-close-lightbox="true"></div>
+      <figure class="lightbox-figure">
+        <button id="lightboxCloseBtn" class="lightbox-close" type="button" aria-label="Bild schließen">×</button>
+        <img id="lightboxImage" src="" alt="" />
+        <figcaption id="lightboxCaption"></figcaption>
+      </figure>
+    </div>
 
     <script src="/static/app.js"></script>
   </body>
