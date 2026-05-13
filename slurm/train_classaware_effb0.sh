@@ -47,6 +47,6 @@ python3 train.py \
   --augmentation-mode class_aware \
   --imbalance-strategy both \
   --threshold-min-recall 0.80 \
-  --output-dir artifacts/a100_classaware_both
+  --output-dir artifacts/runs/server/completed/a100_classaware_both
 
 echo "Job finished at $(date)"

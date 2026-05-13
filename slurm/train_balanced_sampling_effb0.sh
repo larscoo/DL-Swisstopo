@@ -41,6 +41,6 @@ python3 train.py \
   --lr 3e-4 \
   --weight-decay 1e-4 \
   --balanced-sampling \
-  --output-dir artifacts/a100_balanced_sampling
+  --output-dir artifacts/runs/server/completed/a100_balanced_sampling
 
 echo "Job finished at $(date)"

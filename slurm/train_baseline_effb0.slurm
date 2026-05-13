@@ -40,6 +40,6 @@ python3 train.py \
   --num-workers 12 \
   --lr 3e-4 \
   --weight-decay 1e-4 \
-  --output-dir artifacts/a100_baseline_effb0
+  --output-dir artifacts/runs/server/completed/a100_baseline_effb0
 
 echo "Job finished at $(date)"
