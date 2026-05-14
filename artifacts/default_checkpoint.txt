@@ -1,0 +1,1 @@
+artifacts/runs/server/sampler_only_effb0/best_model.pt
