@@ -9,6 +9,7 @@ Dieses Verzeichnis enthaelt die Modelle, Metriken und Inferenz-Ausgaben des Proj
 - `experiments/`
 - `predictions/`
 - `default_checkpoint.txt`
+- `default_threshold.txt`
 - `README.md`
 
 Die Root-Ebene von `artifacts/` enthaelt bewusst keine einzelnen Modell- oder Metrics-Dateien mehr.
@@ -19,6 +20,7 @@ Die Root-Ebene von `artifacts/` enthaelt bewusst keine einzelnen Modell- oder Me
 artifacts/
   README.md
   default_checkpoint.txt
+  default_threshold.txt
   runs/
     local/
     server/
@@ -50,6 +52,9 @@ artifacts/
 
 - `default_checkpoint.txt`
   Legt explizit fest, welches Modell App und `predict.py` standardmaessig verwenden.
+
+- `default_threshold.txt`
+  Legt den Inferenz-Threshold fuer das Default-Modell fest, falls er vom gespeicherten Checkpoint-Threshold abweichen soll.
 
 ## Namenskonvention
 

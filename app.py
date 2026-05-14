@@ -12,7 +12,11 @@ import torch
 from PIL import Image
 from flask import Flask, abort, jsonify, render_template, request, send_file
 
-from artifact_utils import list_available_checkpoints, resolve_default_checkpoint_path
+from artifact_utils import (
+    list_available_checkpoints,
+    resolve_default_checkpoint_path,
+    resolve_inference_threshold,
+)
 from train import build_model, default_transforms, resolve_device
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -244,7 +248,11 @@ def _load_predict_model(checkpoint_value: str | None = None) -> dict[str, object
         model_info = checkpoint.get("model_info", {})
         model_name = str(model_info.get("model_name") or model_args.get("model") or "simple_cnn")
         image_size = int(model_args.get("image_size", 224))
-        threshold = float(checkpoint.get("best_threshold", 0.5))
+        threshold = resolve_inference_threshold(
+            BASE_DIR,
+            checkpoint_path,
+            float(checkpoint.get("best_threshold", 0.5)),
+        )
 
         device = resolve_device("auto")
         model, _ = build_model(model_name, "off")

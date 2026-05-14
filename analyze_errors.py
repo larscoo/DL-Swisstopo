@@ -12,7 +12,7 @@ import torch
 from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
-from artifact_utils import resolve_default_checkpoint_path
+from artifact_utils import resolve_default_checkpoint_path, resolve_inference_threshold
 from train import build_model, default_transforms, resolve_device
 
 
@@ -226,7 +226,15 @@ def main() -> None:
     model_info = checkpoint.get("model_info", {})
     model_name = str(model_info.get("model_name") or model_args.get("model") or "simple_cnn")
     image_size = int(model_args.get("image_size", 224))
-    threshold = float(args.threshold if args.threshold is not None else checkpoint.get("best_threshold", 0.5))
+    threshold = float(
+        args.threshold
+        if args.threshold is not None
+        else resolve_inference_threshold(
+            project_root,
+            checkpoint_path.resolve(),
+            float(checkpoint.get("best_threshold", 0.5)),
+        )
+    )
 
     output_dir = (
         Path(args.output_dir)

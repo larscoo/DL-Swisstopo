@@ -14,6 +14,7 @@ DEPRIORITIZED_DIRS = (
     ("experiments", 30),
 )
 DEFAULT_CHECKPOINT_POINTER = Path("artifacts/default_checkpoint.txt")
+DEFAULT_THRESHOLD_POINTER = Path("artifacts/default_threshold.txt")
 
 
 def _collect_pt_files(root: Path) -> list[Path]:
@@ -64,6 +65,25 @@ def _read_preferred_checkpoint(base_dir: Path) -> Path | None:
             f"Default checkpoint pointer references a missing file: {resolved}"
         )
     return resolved
+
+
+def _read_preferred_threshold(base_dir: Path) -> float | None:
+    pointer_path = base_dir / DEFAULT_THRESHOLD_POINTER
+    if not pointer_path.exists():
+        return None
+
+    raw_value = pointer_path.read_text(encoding="utf-8").strip()
+    if not raw_value:
+        return None
+
+    try:
+        threshold = float(raw_value)
+    except ValueError as exc:
+        raise ValueError(f"Default threshold pointer contains an invalid float: {raw_value!r}") from exc
+
+    if not 0.0 <= threshold <= 1.0:
+        raise ValueError(f"Default threshold must be between 0.0 and 1.0, got {threshold}.")
+    return threshold
 
 
 def list_available_checkpoints(
@@ -144,3 +164,18 @@ def resolve_default_checkpoint_path(base_dir: Path) -> Path:
     if not checkpoints:
         raise FileNotFoundError("No model checkpoints found under artifacts/.")
     return (base_dir / checkpoints[0]["path"]).resolve()
+
+
+def resolve_inference_threshold(
+    base_dir: Path,
+    checkpoint_path: Path,
+    checkpoint_threshold: float,
+) -> float:
+    preferred_checkpoint = _read_preferred_checkpoint(base_dir)
+    preferred_threshold = _read_preferred_threshold(base_dir)
+    if preferred_checkpoint is None or preferred_threshold is None:
+        return checkpoint_threshold
+
+    if checkpoint_path.resolve() == preferred_checkpoint.resolve():
+        return preferred_threshold
+    return checkpoint_threshold
