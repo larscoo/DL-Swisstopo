@@ -276,10 +276,12 @@ def main() -> None:
         raise ValueError("No existing image files remained after manifest filtering.")
 
     loader = make_loader(existing_rows, eval_transform, args.batch_size, args.num_workers, device, project_root)
+    total_batches = len(loader)
+    progress_interval = max(1, total_batches // 20) if total_batches else 1
 
     prediction_rows: list[dict[str, object]] = []
     with torch.no_grad():
-        for images, batch_paths, batch_indices in loader:
+        for batch_number, (images, batch_paths, batch_indices) in enumerate(loader, start=1):
             images = images.to(device, non_blocking=True)
             logits = model(images)
             if logits.ndim > 1:
@@ -308,6 +310,15 @@ def main() -> None:
                     }
                 )
                 prediction_rows.append(row)
+
+            if batch_number == 1 or batch_number == total_batches or batch_number % progress_interval == 0:
+                processed = min(batch_number * args.batch_size, len(existing_rows))
+                percent = (processed / len(existing_rows)) * 100 if existing_rows else 100.0
+                print(
+                    f"[analyze_errors] {processed}/{len(existing_rows)} rows "
+                    f"({percent:.1f}%) processed on {device.type}.",
+                    flush=True,
+                )
 
     prediction_rows.sort(
         key=lambda row: (str(row["error_type"]), -float(str(row["score"])), str(row["resolved_image_path"]))
@@ -341,14 +352,18 @@ def main() -> None:
     }
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
-    print(f"Analyzed {len(prediction_rows)} rows from split={args.split!r} using {checkpoint_path.parent.name}.")
+    print(
+        f"Analyzed {len(prediction_rows)} rows from split={args.split!r} using {checkpoint_path.parent.name}.",
+        flush=True,
+    )
     print(
         f"Precision={summary['metrics']['precision']:.4f}, "
         f"Recall={summary['metrics']['recall']:.4f}, "
         f"F1={summary['metrics']['f1']:.4f}, "
-        f"FP={len(false_positives)}, FN={len(false_negatives)}."
+        f"FP={len(false_positives)}, FN={len(false_negatives)}.",
+        flush=True,
     )
-    print(f"Saved analysis to {output_dir}")
+    print(f"Saved analysis to {output_dir}", flush=True)
 
 
 if __name__ == "__main__":

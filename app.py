@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import math
 import shutil
 import threading
@@ -42,6 +43,100 @@ _predict_image_size = 224
 _predict_model_name = ""
 _predict_transform = None
 _predict_checkpoint_path: Path | None = None
+
+
+def _read_json_file(path: Path) -> dict[str, object] | None:
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _checkpoint_metrics_path(checkpoint_path: Path) -> Path:
+    return checkpoint_path.parent / "metrics.json"
+
+
+def _checkpoint_analysis_summary_path(checkpoint_path: Path) -> Path:
+    return ARTIFACTS_DIR / "analysis" / checkpoint_path.parent.name / "summary.json"
+
+
+def _best_history_entry(history: list[dict[str, object]], key: str) -> dict[str, object] | None:
+    ranked: list[dict[str, object]] = []
+    for row in history:
+        value = row.get(key)
+        if isinstance(value, (int, float)):
+            ranked.append(row)
+    if not ranked:
+        return None
+    return max(ranked, key=lambda row: float(row.get(key, 0.0)))
+
+
+def _build_model_stats_payload(checkpoint_path: Path) -> dict[str, object]:
+    metrics_path = _checkpoint_metrics_path(checkpoint_path)
+    summary_path = _checkpoint_analysis_summary_path(checkpoint_path)
+    metrics_payload = _read_json_file(metrics_path)
+    summary_payload = _read_json_file(summary_path)
+
+    stats: dict[str, object] = {
+        "available": metrics_payload is not None or summary_payload is not None,
+        "metrics_path": metrics_path.relative_to(BASE_DIR).as_posix() if metrics_path.exists() else "",
+        "analysis_summary_path": summary_path.relative_to(BASE_DIR).as_posix() if summary_path.exists() else "",
+    }
+
+    if metrics_payload is not None:
+        history_raw = metrics_payload.get("history", [])
+        history = [row for row in history_raw if isinstance(row, dict)]
+        best_epoch = _best_history_entry(history, "val_f1")
+        final_epoch = history[-1] if history else None
+        stats.update(
+            {
+                "dataset_source": metrics_payload.get("dataset_source", ""),
+                "epochs": len(history),
+                "history": history,
+                "best_epoch": best_epoch,
+                "final_epoch": final_epoch,
+                "model_info": metrics_payload.get("model_info", {}),
+                "split_info": metrics_payload.get("split_info", {}),
+                "training_config": metrics_payload.get("training_config", {}),
+            }
+        )
+
+    if summary_payload is not None:
+        stats.update(
+            {
+                "evaluation_split": summary_payload.get("split", ""),
+                "evaluation_threshold": summary_payload.get("threshold"),
+                "test_metrics": summary_payload.get("metrics", {}),
+                "false_positives": summary_payload.get("false_positives"),
+                "false_negatives": summary_payload.get("false_negatives"),
+                "skipped_rows": summary_payload.get("skipped_rows"),
+            }
+        )
+
+    return stats
+
+
+def _model_status_payload(
+    checkpoint_path: Path,
+    device_type: str,
+    threshold: float,
+    image_size: int,
+    model_name: str,
+) -> dict[str, object]:
+    return {
+        "ready": True,
+        "checkpoint_path": checkpoint_path.as_posix(),
+        "checkpoint_relpath": checkpoint_path.relative_to(BASE_DIR).as_posix(),
+        "device": device_type,
+        "threshold": threshold,
+        "image_size": image_size,
+        "model_name": model_name,
+        "available_checkpoints": _list_available_checkpoints(),
+        "model_stats": _build_model_stats_payload(checkpoint_path),
+    }
 
 
 def _resolve_image_disk_path(image_path: str) -> Path:
@@ -229,16 +324,13 @@ def _load_predict_model(checkpoint_value: str | None = None) -> dict[str, object
     with _model_lock:
         checkpoint_path = _resolve_checkpoint_path(checkpoint_value)
         if _predict_model is not None and _predict_checkpoint_path is not None and _predict_checkpoint_path.resolve() == checkpoint_path.resolve():
-            return {
-                "ready": True,
-                "checkpoint_path": _predict_checkpoint_path.as_posix(),
-                "checkpoint_relpath": _predict_checkpoint_path.relative_to(BASE_DIR).as_posix(),
-                "device": _predict_device.type,
-                "threshold": _predict_threshold,
-                "image_size": _predict_image_size,
-                "model_name": _predict_model_name,
-                "available_checkpoints": _list_available_checkpoints(),
-            }
+            return _model_status_payload(
+                _predict_checkpoint_path,
+                _predict_device.type,
+                _predict_threshold,
+                _predict_image_size,
+                _predict_model_name,
+            )
 
         if not checkpoint_path.exists():
             raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
@@ -270,16 +362,13 @@ def _load_predict_model(checkpoint_value: str | None = None) -> dict[str, object
         _predict_transform = eval_transform
         _predict_checkpoint_path = checkpoint_path
 
-        return {
-            "ready": True,
-            "checkpoint_path": checkpoint_path.as_posix(),
-            "checkpoint_relpath": checkpoint_path.relative_to(BASE_DIR).as_posix(),
-            "device": device.type,
-            "threshold": threshold,
-            "image_size": image_size,
-            "model_name": model_name,
-            "available_checkpoints": _list_available_checkpoints(),
-        }
+        return _model_status_payload(
+            checkpoint_path,
+            device.type,
+            threshold,
+            image_size,
+            model_name,
+        )
 
 
 def _predict_image(image_bytes: bytes) -> tuple[float, int]:

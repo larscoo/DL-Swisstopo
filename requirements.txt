@@ -1,12 +1,12 @@
 # Core application and training dependencies
 Flask
 Pillow
+matplotlib
 requests
 torch
 torchvision
 
 # Optional extras for notebooks / comparison experiments in _others-Project
-# matplotlib
 # numpy
 # optuna
 # psutil

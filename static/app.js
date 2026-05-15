@@ -32,6 +32,7 @@ const clearUploadBtnEl = document.getElementById('clearUploadBtn');
 const predictFeedbackEl = document.getElementById('predictFeedback');
 const predictResultsEl = document.getElementById('predictResults');
 const modelStatusEl = document.getElementById('modelStatus');
+const modelStatsEl = document.getElementById('modelStats');
 const predictSortEl = document.getElementById('predictSort');
 const predictFilterEl = document.getElementById('predictFilter');
 const predictLimitEl = document.getElementById('predictLimit');
@@ -262,6 +263,159 @@ function renderModelStatus(payload, isError = false) {
   `;
 }
 
+function formatMetricPercent(value, digits = 2) {
+  return typeof value === 'number' ? `${(value * 100).toFixed(digits)}%` : '–';
+}
+
+function formatMetricNumber(value, digits = 3) {
+  return typeof value === 'number' ? value.toFixed(digits) : '–';
+}
+
+function renderHistoryChart(history = []) {
+  const points = history
+    .map((entry) => ({
+      epoch: Number(entry.epoch),
+      valF1: Number(entry.val_f1),
+      valLoss: Number(entry.val_loss),
+    }))
+    .filter((entry) => Number.isFinite(entry.epoch) && Number.isFinite(entry.valF1) && Number.isFinite(entry.valLoss));
+
+  if (points.length < 2) {
+    return '<p class="empty-state">Zu wenige Verlaufsdaten für ein Diagramm.</p>';
+  }
+
+  const width = 640;
+  const height = 220;
+  const paddingX = 18;
+  const paddingTop = 20;
+  const paddingBottom = 26;
+  const innerWidth = width - paddingX * 2;
+  const innerHeight = height - paddingTop - paddingBottom;
+  const f1Min = Math.min(...points.map((point) => point.valF1));
+  const f1Max = Math.max(...points.map((point) => point.valF1));
+  const lossMin = Math.min(...points.map((point) => point.valLoss));
+  const lossMax = Math.max(...points.map((point) => point.valLoss));
+  const epochMin = Math.min(...points.map((point) => point.epoch));
+  const epochMax = Math.max(...points.map((point) => point.epoch));
+  const f1Range = Math.max(f1Max - f1Min, 0.001);
+  const lossRange = Math.max(lossMax - lossMin, 0.001);
+  const epochRange = Math.max(epochMax - epochMin, 1);
+
+  const toX = (epoch) => paddingX + ((epoch - epochMin) / epochRange) * innerWidth;
+  const toY = (value, min, range) => paddingTop + (1 - (value - min) / range) * innerHeight;
+  const makePath = (key, min, range) =>
+    points
+      .map((point, index) => `${index === 0 ? 'M' : 'L'} ${toX(point.epoch).toFixed(1)} ${toY(point[key], min, range).toFixed(1)}`)
+      .join(' ');
+
+  const tickCount = Math.min(points.length, 6);
+  const ticks = Array.from({ length: tickCount }, (_, index) => {
+    const ratio = tickCount === 1 ? 0 : index / (tickCount - 1);
+    const epoch = epochMin + ratio * epochRange;
+    const x = paddingX + ratio * innerWidth;
+    return `<g><line x1="${x.toFixed(1)}" y1="${paddingTop + innerHeight}" x2="${x.toFixed(1)}" y2="${paddingTop + innerHeight + 6}" />
+      <text x="${x.toFixed(1)}" y="${height - 4}" text-anchor="middle">${Math.round(epoch)}</text></g>`;
+  }).join('');
+
+  const guideLines = [0, 0.5, 1]
+    .map((ratio) => {
+      const y = paddingTop + ratio * innerHeight;
+      return `<line x1="${paddingX}" y1="${y.toFixed(1)}" x2="${width - paddingX}" y2="${y.toFixed(1)}" />`;
+    })
+    .join('');
+
+  return `
+    <div class="chart-card">
+      <div class="chart-header">
+        <strong>Validierungsverlauf</strong>
+        <span>F1 und Loss pro Epoche</span>
+      </div>
+      <svg class="history-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Verlauf von Validation F1 und Validation Loss">
+        <g class="chart-guides">${guideLines}</g>
+        <g class="chart-axis">${ticks}</g>
+        <path class="chart-line chart-line-f1" d="${makePath('valF1', f1Min, f1Range)}" />
+        <path class="chart-line chart-line-loss" d="${makePath('valLoss', lossMin, lossRange)}" />
+      </svg>
+      <div class="chart-legend">
+        <span><i class="legend-swatch legend-f1"></i>Val F1</span>
+        <span><i class="legend-swatch legend-loss"></i>Val Loss</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderModelStats(payload, isError = false) {
+  if (!modelStatsEl) {
+    return;
+  }
+
+  if (isError) {
+    modelStatsEl.innerHTML = `<p class="empty-state">${payload.error || 'Modellstatistiken konnten nicht geladen werden.'}</p>`;
+    return;
+  }
+
+  const stats = payload.model_stats;
+  if (!stats || !stats.available) {
+    modelStatsEl.innerHTML = '<p class="empty-state">Für dieses Modell wurden keine gespeicherten Statistiken gefunden.</p>';
+    return;
+  }
+
+  const best = stats.best_epoch || {};
+  const finalEpoch = stats.final_epoch || {};
+  const test = stats.test_metrics || {};
+  const training = stats.training_config || {};
+  const hasTestMetrics = typeof test.f1 === 'number';
+  const bestThreshold = typeof best.threshold === 'number' ? best.threshold : payload.threshold;
+
+  modelStatsEl.innerHTML = `
+    <div class="stats-grid">
+      <article class="stats-card">
+        <p class="stats-label">Test F1</p>
+        <p class="stats-value">${hasTestMetrics ? formatMetricPercent(test.f1) : '–'}</p>
+        <p class="stats-subtitle">Split: ${stats.evaluation_split || '–'} · Threshold: ${formatMetricNumber(payload.threshold, 2)}</p>
+      </article>
+      <article class="stats-card">
+        <p class="stats-label">Precision / Recall</p>
+        <p class="stats-value">${hasTestMetrics ? `${formatMetricPercent(test.precision)} / ${formatMetricPercent(test.recall)}` : '–'}</p>
+        <p class="stats-subtitle">${hasTestMetrics ? `${test.tp} TP · ${test.fp} FP · ${test.fn} FN` : 'Keine Testauswertung gefunden'}</p>
+      </article>
+      <article class="stats-card">
+        <p class="stats-label">Beste Val-Epoche</p>
+        <p class="stats-value">${best.epoch ? `#${best.epoch}` : '–'}</p>
+        <p class="stats-subtitle">F1: ${formatMetricPercent(best.val_f1)} · Loss: ${formatMetricNumber(best.val_loss, 4)}</p>
+      </article>
+      <article class="stats-card">
+        <p class="stats-label">Training</p>
+        <p class="stats-value">${stats.epochs || 0} Epochen</p>
+        <p class="stats-subtitle">${training.imbalance_strategy || '–'} · ${training.augmentation_mode || '–'} · Best-Thr: ${formatMetricNumber(bestThreshold, 2)}</p>
+      </article>
+    </div>
+    <div class="stats-detail-grid">
+      <article class="stats-card stats-card-wide">
+        ${renderHistoryChart(stats.history || [])}
+      </article>
+      <article class="stats-card">
+        <p class="stats-label">Finale Epoche</p>
+        <div class="stats-list">
+          <span>Val F1 <strong>${formatMetricPercent(finalEpoch.val_f1)}</strong></span>
+          <span>Val Acc <strong>${formatMetricPercent(finalEpoch.val_accuracy)}</strong></span>
+          <span>Val PR-AUC <strong>${formatMetricPercent(finalEpoch.val_pr_auc)}</strong></span>
+          <span>Val Loss <strong>${formatMetricNumber(finalEpoch.val_loss, 4)}</strong></span>
+        </div>
+      </article>
+      <article class="stats-card">
+        <p class="stats-label">Artefakte</p>
+        <div class="stats-list">
+          <span>Metrics <strong>${stats.metrics_path || '–'}</strong></span>
+          <span>Summary <strong>${stats.analysis_summary_path || '–'}</strong></span>
+          <span>Bildgröße <strong>${payload.image_size || '–'}</strong></span>
+          <span>Modell <strong>${payload.model_name || '–'}</strong></span>
+        </div>
+      </article>
+    </div>
+  `;
+}
+
 function renderCheckpointOptions(items = [], activePath = '') {
   availableCheckpoints = items;
   predictCheckpointEl.innerHTML = '';
@@ -476,12 +630,15 @@ async function fetchModelStatus() {
     renderCheckpointOptions(data.available_checkpoints || [], data.checkpoint_relpath || selectedCheckpoint);
     if (!res.ok || !data.ready) {
       renderModelStatus(data, true);
+      renderModelStats(data, true);
       return;
     }
     selectedCheckpoint = data.checkpoint_relpath || selectedCheckpoint;
     renderModelStatus(data);
+    renderModelStats(data);
   } catch (error) {
     renderModelStatus({ error: 'Modellstatus konnte nicht geladen werden.' }, true);
+    renderModelStats({ error: 'Modellstatistiken konnten nicht geladen werden.' }, true);
   }
 }
 
@@ -516,6 +673,7 @@ async function runPrediction(event) {
     }
 
     renderModelStatus(data.model);
+    renderModelStats(data.model);
     lastPredictionResults = data.results || [];
     lastPredictionModel = data.model || null;
     renderPredictionResults(lastPredictionResults, lastPredictionModel);
