@@ -1,6 +1,6 @@
 # Artifacts
 
-Dieses Verzeichnis enthaelt die Modelle, Metriken und Inferenz-Ausgaben des Projekts.
+Dieses Verzeichnis enthält die Modelle, Metriken und Inferenz-Ausgaben des Projekts.
 
 ## Schnelle Orientierung
 
@@ -12,7 +12,7 @@ Dieses Verzeichnis enthaelt die Modelle, Metriken und Inferenz-Ausgaben des Proj
 - `default_threshold.txt`
 - `README.md`
 
-Die Root-Ebene von `artifacts/` enthaelt bewusst keine einzelnen Modell- oder Metrics-Dateien mehr.
+Die Root-Ebene von `artifacts/` enthält bewusst keine einzelnen Modell- oder Metrics-Dateien mehr.
 
 ## Ordnerstruktur
 
@@ -33,52 +33,52 @@ artifacts/
 ## Bedeutung der Unterordner
 
 - `runs/local/`
-  Abgelegte lokale Trainingslaeufe, z. B. fruehere Mac/MPS-Runs.
+  Abgelegte lokale Trainingsläufe, z. B. frühere Mac/MPS-Runs.
 
 - `runs/server/`
-  Vollstaendige Hauptlaeufe vom Server mit fertigem `best_model.pt`, `metrics.json` und `manifest.csv`.
+  Vollständige Hauptläufe vom Server mit fertigem `best_model.pt`, `metrics.json` und `manifest.csv`.
 
 - `runs/server/seeds/`
-  Seed-Serien zur Stabilitaetspruefung der besten Kandidaten.
+  Seed-Serien zur Stabilitätsprüfung der besten Kandidaten.
 
 - `analysis/`
   Fehleranalysen aus `analyze_errors.py`, z. B. `false_positives.csv`, `false_negatives.csv` und `summary.json`.
 
 - `experiments/`
-  Kurzlaeufe, Mini-Subset-Vergleiche und sonstige Testexperimente.
+  Kurzläufe, Mini-Subset-Vergleiche und sonstige Testexperimente.
 
 - `predictions/`
   CSV-Ausgaben aus `predict.py`.
 
 - `default_checkpoint.txt`
-  Legt explizit fest, welches Modell App und `predict.py` standardmaessig verwenden.
+  Legt explizit fest, welches Modell App und `predict.py` standardmässig verwenden.
 
 - `default_threshold.txt`
-  Legt den Inferenz-Threshold fuer das Default-Modell fest, falls er vom gespeicherten Checkpoint-Threshold abweichen soll.
+  Legt den Inferenz-Threshold für das Default-Modell fest, falls er vom gespeicherten Checkpoint-Threshold abweichen soll.
 
 ## Namenskonvention
 
-Empfohlen fuer neue `--output-dir` Werte:
+Empfohlen für neue `--output-dir` Werte:
 
-- Vollstaendige lokale Runs:
+- Vollständige lokale Runs:
   `artifacts/runs/local/<datum>-<modell>-<notiz>`
 
-- Vollstaendige Server-Runs:
+- Vollständige Server-Runs:
   `artifacts/runs/server/<datum>-<gpu>-<modell>-<notiz>`
 
-- Vergleichs- oder Testlaeufe:
+- Vergleichs- oder Testläufe:
   `artifacts/experiments/<datum>-<vergleichsname>`
 
 ## Aktueller Stand
 
 - `runs/server/sampler_only_effb0/`
-  Aktuell gesetztes Default-Modell fuer App und Inferenz.
+  Aktuell gesetztes Default-Modell für App und Inferenz.
 
 - `runs/server/seeds/`
-  Enthaelt die Seed-Runs fuer `sampler_only` und `both`.
+  Enthält die Seed-Runs für `sampler_only` und `both`.
 
 - `experiments/`
-  Enthaelt die kleinen Vergleichslaeufe aus der Analysephase.
+  Enthält die kleinen Vergleichsläufe aus der Analysephase.
 
 - `runs/local/root-default-run/`
-  Frueherer lokaler Standard-Run, der vorher direkt im Root von `artifacts/` lag.
+  Früherer lokaler Standard-Run, der vorher direkt im Root von `artifacts/` lag.

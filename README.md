@@ -34,6 +34,7 @@ artifacts/
 generate_points_grid.py
 download_tiles.py
 app.py
+webapp/
 train.py
 predict.py
 ```
@@ -125,6 +126,7 @@ python3 app.py
 ```
 
 Dann im Browser die angezeigte lokale URL öffnen.
+Der eigentliche Web-App-Code liegt unter `webapp/`, `app.py` im Repo-Root ist nur der Startpunkt.
 
 Der Labeling-Tab zeigt nur offene Bilder aus `data/unlabeled`.
 
@@ -264,6 +266,34 @@ Features:
 - Drag-and-Drop für Bild-Upload im Modell-Test
 - Sortierung und Filterung der Vorhersagen
 - automatische Queue-Synchronisation für `data/unlabeled`
+
+## Aktuelle Modellstände
+
+Stand im Repo: `2026-05-16`. Die stärksten vorhandenen Server-Läufe nutzen alle `efficientnet_b0` mit vortrainierten Gewichten. Die Testmenge ist in diesen Läufen identisch: `n=16413`, davon `479` positiv und `15934` negativ.
+
+| Lauf | Strategie | Accuracy | Precision | Recall | F1 | PR-AUC | Threshold |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `a100_balanced_sampling` | `both` | `0.9969` | `0.9280` | `0.9687` | `0.9479` | `0.9759` | `0.95` |
+| `sampler_only_effb0` | `sampler` | `0.9968` | `0.9383` | `0.9520` | `0.9451` | `0.9720` | `0.90` |
+| `a100_baseline_effb0` | `pos_weight` | `0.9966` | `0.9343` | `0.9499` | `0.9420` | `0.9808` | `0.95` |
+| `final_sampler_only_effb0_img320` | `sampler`, `img_size=320` | `0.9961` | `0.9462` | `0.9186` | `0.9322` | `0.9745` | `0.90` |
+
+Kurz gelesen:
+
+- `a100_balanced_sampling` hat im Repo aktuell den besten `F1`-Wert.
+- `a100_baseline_effb0` hat die beste `PR-AUC`.
+- `final_sampler_only_effb0_img320` hat die höchste `Precision`, verliert aber bei `Recall` und `F1`.
+
+Plots des aktuell stärksten Laufs `a100_balanced_sampling`:
+
+<p>
+  <img src="plots/a100_balanced_sampling/training_curves.png" alt="Training Curves" width="49%" />
+  <img src="plots/a100_balanced_sampling/confusion_matrix.png" alt="Confusion Matrix" width="49%" />
+</p>
+<p>
+  <img src="plots/a100_balanced_sampling/pr_curve.png" alt="PR Curve" width="49%" />
+  <img src="plots/a100_balanced_sampling/roc_curve.png" alt="ROC Curve" width="49%" />
+</p>
 
 ## Hinweise zum aktuellen Stand
 
