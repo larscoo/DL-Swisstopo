@@ -15,69 +15,61 @@ Der aktuelle Workflow ist:
 
 ## Projektstruktur
 
+Die wichtigsten Ordner / Files:
+
 ```text
-data/
-  unlabeled/     Noch nicht gelabelte Bilder für das Web-UI
-  y/             Positive Bilder: Fussgängerstreifen vorhanden
-  n/             Negative Bilder: kein Fussgängerstreifen
-  labels.csv     Metadaten für offene Bilder in data/unlabeled
-
-artifacts/
-  runs/
-    local/
-    server/
-      completed/
-      incomplete/
-  experiments/
-  predictions/
-
-generate_points_grid.py
-download_tiles.py
-app.py
-webapp/
-train.py
-predict.py
+├── analyze_errors.py       Fehleranalyse für False Positives und False Negatives
+├── app.py                  Startpunkt zum lokalen Starten der Web-Anwendung
+├── artifact_utils.py       Hilfsfunktionen zum Finden und Verwalten von Modellartefakten
+├── download_tiles.py       Lädt Swisstopo-Tiles herunter und erzeugt die Label-Queue
+├── export_error_tiles.py   Exportiert Fehlklassifikationen zur manuellen Sichtung
+├── generate_model_plots.py Erzeugt Trainings-, PR-, ROC- und Confusion-Matrix-Plots
+├── generate_points_grid.py Erzeugt Punkt- oder Rasterkoordinaten für neue Tile-Abfragen
+├── predict.py              Führt Inferenz auf Einzelbildern oder ganzen Ordnern aus
+├── requirements.txt        Python-Abhängigkeiten für das Projekt
+├── train.py                Trainiert das Klassifikationsmodell
+├── artifacts/              Modelle, Metriken, Analysen und Vorhersage-Artefakte
+│   ├── analysis/           Auswertungen und Fehleranalysen zu Modellläufen
+│   ├── predictions/        Gespeicherte CSV-Vorhersagen aus `predict.py`
+│   └── runs/               Vollständige Trainingsläufe mit Checkpoints und Metriken
+│       ├── local/          Lokale Trainingsläufe, z. B. auf Mac oder Laptop
+│       └── server/         Trainingsläufe vom Server oder GPU-System
+├── data/                   Aktive Datenablage für Bilder und Labels
+│   ├── labels.csv          Metadaten für offene Bilder in `data/unlabeled`
+│   ├── n/                  Negative Bilder: kein Fussgängerstreifen vorhanden
+│   ├── unlabeled/          Noch nicht gelabelte Bilder für das Web-UI
+│   └── y/                  Positive Bilder: Fussgängerstreifen vorhanden
+├── plots/                  Exportierte Vergleichsplots zu trainierten Modellläufen
+├── slurm/                  Shell- und SLURM-Skripte für Server-Trainingsläufe
+└── webapp/                 Flask-Webapp mit Backend, Templates, CSS und JavaScript
 ```
 
 ## Bedeutungen der Labels
 
-- `1` oder positiv: Fussgängerstreifen vorhanden
-- `0` oder negativ: kein Fussgängerstreifen vorhanden
+- `1` / positiv: Fussgängerstreifen vorhanden
+- `0` / negativ: kein Fussgängerstreifen vorhanden
 
 ## Voraussetzungen
 
 Mindestens benötigt:
 
 - Python 3
-- `requests` für den Tile-Download
-- `flask`, `pillow`, `torch`
-- optional `torchvision`
+- `requests`, `flask`, `pillow`, `torch`
+- `torchvision` (optional)
 
-Beispiel:
+Installation:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python3 -m pip install requests flask pillow torch torchvision
+python3 -m pip install -r requirements.txt
 ```
 
 ## Quickstart
 
 ### 1. Punkte erzeugen
 
-Beispiel mit Preset:
-
-```bash
-python3 generate_points_grid.py \
-  --preset glarus \
-  --sampling blocks \
-  --num-blocks 64 \
-  --block-size 4 \
-  --region-id region_glarus_01 \
-  --output points.csv
-```
-
-Eigener Ausschnitt:
+Anhand Koordinaten
 
 ```bash
 python3 generate_points_grid.py \
@@ -98,6 +90,8 @@ Hinweis:
 - Koordinaten sind in `EPSG:2056`
 - `points.csv` braucht mindestens `x`, `y`, `region_id`
 
+(Alternativ kann auch der swissimage_annotator verwendet werden)
+
 ### 2. Tiles herunterladen
 
 ```bash
@@ -106,16 +100,9 @@ python3 download_tiles.py
 
 Das Skript:
 
-- laedt Bilder nach `data/unlabeled/<region_id>/`
+- lädt Bilder nach `data/unlabeled/<region_id>/`
 - speichert sie als Koordinaten-Dateinamen wie `2725075_1208825.jpg`
 - schreibt Metadaten nach `data/labels.csv`
-
-Wichtige Optionen:
-
-- `--input-csv points.csv`
-- `--output-dir data/unlabeled`
-- `--output-labels-csv data/labels.csv`
-- `--overwrite`
 
 ### 3. Bilder im Web-UI labeln
 
@@ -126,8 +113,6 @@ python3 app.py
 ```
 
 Dann im Browser die angezeigte lokale URL öffnen.
-Der eigentliche Web-App-Code liegt unter `webapp/`, `app.py` im Repo-Root ist nur der Startpunkt.
-
 Der Labeling-Tab zeigt nur offene Bilder aus `data/unlabeled`.
 
 Beim Speichern gilt:
@@ -136,12 +121,6 @@ Beim Speichern gilt:
 - `0` -> Datei wird nach `data/n` verschoben
 
 Danach verschwindet das Bild aus der offenen Queue.
-
-Wichtig:
-
-- Neue Bilder in `data/unlabeled` werden automatisch erkannt
-- Unterordner in `data/unlabeled` sind erlaubt, zum Beispiel `data/unlabeled/zuerich/`
-- Aus solchen Unterordnern wird automatisch eine lesbare `region_id`
 
 ### 4. Modell trainieren
 
@@ -176,7 +155,7 @@ Was `train.py` macht:
 - trainiert direkt aus `data/y` und `data/n`
 - liest Koordinaten aus Dateinamen wie `x_y.png`
 - erzeugt einen räumlichen Split für `train`, `val`, `test`
-- speichert das beste Modell standardmaessig in einen neuen Ordner unter `artifacts/runs/local/`
+- speichert das beste Modell standardmässig in einen neuen Ordner unter `artifacts/runs/local/`
 
 Wichtige Optionen:
 
@@ -184,7 +163,6 @@ Wichtige Optionen:
 - `--model auto|simple_cnn|resnet18|efficientnet_b0`
 - `--pretrained auto|on|off`
 - `--balanced-sampling`
-- `--spatial-bin-size 1000`
 - `--csv-path data/labels.csv`
 
 Outputs:
@@ -195,9 +173,7 @@ Outputs:
 
 Hinweis:
 
-- Trainingslaeufe liegen in `artifacts/runs/`
-- Vergleichs- und Kurzlaeufe liegen in `artifacts/experiments/`
-- Inferenz-CSV-Dateien liegen in `artifacts/predictions/`
+- Trainingsläfe liegen in `artifacts/runs/`
 - Details zur Ablage stehen in `artifacts/README.md`
 
 ## Inferenz
@@ -248,24 +224,12 @@ image_path,label,region_id,x,y,block_id
 data/unlabeled/region_glarus_01/2725075_1208825.jpg,,region_glarus_01,2725075,1208825,block_0001
 ```
 
-Hinweise:
-
-- die Datei beschreibt nur die offene Labeling-Queue
-- gelabelte Bilder bleiben für das Training in `data/y` und `data/n`
-- offene Bilder haben ein leeres `label`
-
 ## Web-UI
 
 Die Web-App hat zwei Bereiche:
 
 - `Labeling`: offene Bilder sichten und nach `data/y` oder `data/n` verschieben
 - `Modell-Test`: einzelne Bilder hochladen und mit dem gespeicherten Modell prüfen
-
-Features:
-
-- Drag-and-Drop für Bild-Upload im Modell-Test
-- Sortierung und Filterung der Vorhersagen
-- automatische Queue-Synchronisation für `data/unlabeled`
 
 ## Aktuelle Modellstände
 
@@ -294,8 +258,3 @@ Plots des aktuell stärksten Laufs `a100_balanced_sampling`:
   <img src="plots/a100_balanced_sampling/pr_curve.png" alt="PR Curve" width="49%" />
   <img src="plots/a100_balanced_sampling/roc_curve.png" alt="ROC Curve" width="49%" />
 </p>
-
-## Hinweise zum aktuellen Stand
-
-- Der aktive Workflow nutzt `data/unlabeled`, `data/y`, `data/n` und `data/labels.csv`
-- Alte `images/...`- und Regions-Praefix-Flows sind nicht mehr Teil des aktiven Setups
