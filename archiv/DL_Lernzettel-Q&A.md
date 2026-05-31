@@ -243,3 +243,31 @@ Die wichtigste Erkenntnis war, dass robuste Resultate aus dem Zusammenspiel von 
 Wenn du nur sehr kurz antworten kannst:
 
 Wir haben einen stark unausgeglichenen Swisstopo-Bilddatensatz für die binäre Erkennung von Fussgängerstreifen verwendet. Das Hauptmodell war EfficientNet-B0 mit vortrainierten Gewichten. Die wichtigsten Optimierungen waren räumlicher Split, balanciertes Sampling, gewichteter Loss und Threshold-Tuning. Der beste Lauf erreichte `F1 = 0.9479` bei hohem Recall auf einem räumlich getrennten Testsplit. Die wichtigste Erkenntnis war, dass Datenaufbereitung und Evaluation genauso wichtig sind wie die Modellarchitektur.
+
+## Mögliche Prüfungsfragen mit kurzen Kernantworten
+
+### Warum habt ihr nicht einfach Accuracy optimiert?
+
+Weil der Datensatz stark unausgeglichen ist. Eine hohe Accuracy wäre leicht erreichbar, auch wenn die positive Klasse schlecht erkannt würde. Deshalb waren für mich F1, Recall und PR-AUC aussagekräftiger.
+
+### Warum habt ihr einen räumlichen Split verwendet?
+
+Weil benachbarte Luftbild-Tiles visuell sehr ähnlich sind. Ein normaler Zufallssplit würde leicht zu Data Leakage führen und die Leistung zu optimistisch erscheinen lassen.
+
+### Warum habt ihr EfficientNet-B0 gewählt?
+
+- starke Bildklassifikationsleistung
+- vortrainierte Gewichte verfügbar
+- guter Kompromiss aus Qualität und Rechenaufwand
+
+### Warum ist Recall bei eurem Projekt wichtig?
+
+Weil False Negatives bedeuten, dass echte Fussgängerstreifen übersehen werden. Für meine Aufgabe war das inhaltlich problematischer als ein kleiner Anstieg an False Positives.
+
+### Warum habt ihr mehrere Imbalance-Strategien getestet?
+
+Weil die positive Klasse extrem selten ist. Ich wollte nicht annehmen, dass eine einzelne Standardlösung reicht, sondern systematisch vergleichen, welche Strategie auf meinem Datensatz am besten funktioniert.
+
+### Was war methodisch der wichtigste Entscheid?
+
+Der räumliche Split. Er macht die Evaluation glaubwürdiger und verhindert, dass ich die Modellleistung durch räumlich ähnliche Nachbarbilder künstlich überschätze.

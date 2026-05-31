@@ -88,7 +88,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         default=None,
-        help="Optional output directory. Defaults to plots/<run-name>/.",
+        help="Optional output directory. Defaults to plots/model_plots/<run-name>/.",
     )
     return parser.parse_args()
 
@@ -414,7 +414,7 @@ def main() -> None:
     output_dir = resolve_path(
         project_root,
         args.output_dir,
-        project_root / "plots" / run_name,
+        project_root / "plots" / "model_plots" / run_name,
     )
 
     if not metrics_path.exists():
