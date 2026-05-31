@@ -251,12 +251,12 @@ Kurz gelesen:
 Plots des aktuell stärksten Laufs `a100_balanced_sampling`:
 
 <p>
-  <img src="plots/a100_balanced_sampling/training_curves.png" alt="Training Curves" width="49%" />
-  <img src="plots/a100_balanced_sampling/confusion_matrix.png" alt="Confusion Matrix" width="49%" />
+  <img src="plots/model_plots/a100_balanced_sampling/training_curves.png" alt="Training Curves" width="49%" />
+  <img src="plots/model_plots/a100_balanced_sampling/confusion_matrix.png" alt="Confusion Matrix" width="49%" />
 </p>
 <p>
-  <img src="plots/a100_balanced_sampling/pr_curve.png" alt="PR Curve" width="49%" />
-  <img src="plots/a100_balanced_sampling/roc_curve.png" alt="ROC Curve" width="49%" />
+  <img src="plots/model_plots/a100_balanced_sampling/pr_curve.png" alt="PR Curve" width="49%" />
+  <img src="plots/model_plots/a100_balanced_sampling/roc_curve.png" alt="ROC Curve" width="49%" />
 </p>
 
 ## Zusammenarbeit
