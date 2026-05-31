@@ -258,3 +258,8 @@ Plots des aktuell stärksten Laufs `a100_balanced_sampling`:
   <img src="plots/a100_balanced_sampling/pr_curve.png" alt="PR Curve" width="49%" />
   <img src="plots/a100_balanced_sampling/roc_curve.png" alt="ROC Curve" width="49%" />
 </p>
+
+## Zusammenarbeit
+Für dieses Modul wurde mit anderen Student*innen zusammengearbeitet.
+Fabian, Silvan, Neel, Frederic und ich haben uns zusammengetan und Bilder untereinander ausgetauscht.
+Jeder hat einen Bereich (Stadt) der Schweiz klassifiziert.
